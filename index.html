@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>荒野求生：失落边境</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <!-- 主菜单：保持原样 -->
+    <section id="menu-screen" class="screen active">
+      <div class="title-content">
+        <p class="eyebrow">WILDERNESS SURVIVAL</p>
+        <h1>荒野求生</h1>
+        <h2>失落边境</h2>
+        <p class="subtitle">在无人回应的边境，寻找生存的希望。</p>
+        <div class="menu-buttons">
+          <button id="start-btn" class="primary-btn">开始游戏</button>
+          <button id="continue-btn" disabled>继续游戏（暂无存档）</button>
+          <button id="profiles-btn">角色档案</button>
+          <button id="settings-btn">游戏设置</button>
+        </div>
+        <p class="version">DEMO · 开发版本 v21 · 野兽生态与破碎河谷</p>
+      </div>
+    </section>
+
+    <!-- 开场剧情：保持原样 -->
+    <section id="story-screen" class="screen hidden">
+      <div class="story-panel">
+        <p class="eyebrow">PROLOGUE · 序章</p>
+        <h2>无人回应的边境</h2>
+        <p id="story-text" class="story-text"></p>
+        <div class="story-actions">
+          <button id="skip-story-btn">跳过剧情</button>
+          <button id="next-story-btn" class="primary-btn" hidden>继续</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 角色选择：保持原样 -->
+    <section id="character-screen" class="screen hidden">
+      <div class="selection-panel">
+        <p class="eyebrow">CHOOSE YOUR SURVIVOR</p>
+        <h2>选择你的求生者</h2>
+        <p class="subtitle">不同角色拥有不同的生存优势。</p>
+        <div id="character-list" class="character-list"></div>
+        <div class="selection-actions">
+          <button id="back-menu-btn">返回主菜单</button>
+          <button id="confirm-character-btn" class="primary-btn">确认选择</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 正式游戏：仅此界面采用沉浸式 HUD -->
+    <section id="game-screen" class="screen hidden">
+      <header class="game-header">
+        <div>
+          <strong>荒野求生：失落边境</strong>
+          <span id="player-name">求生者</span>
+        </div>
+        <button id="exit-game-btn">返回主菜单</button>
+      </header>
+
+      <div class="world-layout">
+        <div class="game-board">
+          <canvas id="game-canvas" width="960" height="540">你的浏览器暂不支持 Canvas。</canvas>
+          <div id="interaction-prompt" class="interaction-prompt hidden" role="status" aria-live="polite"></div>
+          <div class="controls-hint">WASD：移动 · 鼠标：瞄准 · F：攻击/使用 · E：交互 · J：任务 · C：制作 · I：背包 · P：选择存档保存 · 夜间野兽增多</div>
+        </div>
+
+        <!-- 旧状态面板保留 DOM，供现有游戏逻辑兼容；视觉上隐藏 -->
+        <aside class="survival-panel">
+          <h3>生存状态</h3>
+          <p>生命 <span id="health-value">100</span></p>
+          <div class="meter"><div id="health-bar" class="meter-fill health"></div></div>
+          <p>饱食 <span id="hunger-value">100</span></p>
+          <div class="meter"><div id="hunger-bar" class="meter-fill hunger"></div></div>
+          <p>水分 <span id="thirst-value">100</span></p>
+          <div class="meter"><div id="thirst-bar" class="meter-fill thirst"></div></div>
+          <hr>
+          <h3>当前任务</h3>
+          <p id="current-task">探索周围环境。</p>
+          <p id="world-position">坐标：0, 0</p>
+          <p class="small-note">当前为第一版地图测试，生存数值暂不随时间变化。</p>
+        </aside>
+      </div>
+
+      <!-- 左上角：生存天数 -->
+      <div class="survival-day hud-panel">
+        <span class="hud-label">SURVIVAL</span>
+        <strong>第 <span id="survival-day-value">1</span> 天</strong>
+      </div>
+
+      <div class="quest-hud hud-panel"><span class="hud-label">MAIN STORY</span><button id="quest-hud-open-btn" type="button"><strong id="quest-hud-label">第 1/16 章 · 坠机后的求生</strong><small>按 J 查看任务日志</small></button></div>
+
+      <!-- 右上角：圆形小地图与天气时间 -->
+      <div class="minimap-widget">
+        <button id="minimap-open-btn" class="minimap-button" type="button" aria-label="放大地图">
+          <canvas id="minimap-canvas" width="180" height="180"></canvas>
+          <span class="minimap-zoom-icon">⌕</span>
+        </button>
+        <button id="map-open-text-btn" class="weather-time" type="button">
+          <span id="weather-value">☀ 晴朗</span>
+          <span class="weather-divider">·</span>
+          <span id="game-time-value">08:30</span>
+        </button>
+        <button id="in-game-settings-btn" class="in-game-settings-btn" type="button" aria-label="打开游戏设置" title="游戏设置">
+          <span aria-hidden="true">⚙</span><span>游戏设置</span>
+        </button>
+      </div>
+
+      <!-- 左下角：圆形生存状态 -->
+      <div class="vitals-hud" aria-label="生存状态">
+        <div class="vital-item">
+          <div class="vital-ring health-ring" id="health-ring">
+            <span class="vital-icon">♥</span>
+          </div>
+          <span class="vital-caption">生命</span>
+          <span class="vital-number" id="hud-health-value">100</span>
+        </div>
+        <div class="vital-item">
+          <div class="vital-ring hunger-ring" id="hunger-ring">
+            <span class="vital-icon">♨</span>
+          </div>
+          <span class="vital-caption">饱腹</span>
+          <span class="vital-number" id="hud-hunger-value">100</span>
+        </div>
+        <div class="vital-item">
+          <div class="vital-ring thirst-ring" id="thirst-ring">
+            <span class="vital-icon">◆</span>
+          </div>
+          <span class="vital-caption">水分</span>
+          <span class="vital-number" id="hud-thirst-value">100</span>
+        </div>
+      </div>
+
+      <!-- 底部中间：5 格快捷栏 -->
+      <div id="hotbar" class="hotbar" aria-label="快捷物品栏"></div>
+
+      <!-- 右下角制作入口 -->
+      <button id="crafting-open-btn" class="crafting-open-btn" type="button"><img class="game-feature-icon" src="images/ui/workbench.png" alt="" aria-hidden="true"><span>制造</span></button>
+      <button id="compendium-open-btn" class="compendium-open-btn" type="button"><img class="game-feature-icon" src="images/ui/field_guide.png" alt="" aria-hidden="true"><span>生存图鉴 <kbd>B</kbd></span></button>
+
+      <!-- 右下角背包入口 -->
+      <button id="inventory-open-btn" class="inventory-open-btn" type="button">
+        <img class="game-feature-icon" src="images/ui/backpack.png" alt="" aria-hidden="true">
+        <span>背包</span>
+      </button>
+
+      <!-- 背包弹窗 -->
+      <div id="inventory-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="inventory-title">
+        <div class="modal-panel inventory-panel">
+          <div class="modal-heading">
+            <div>
+              <p class="hud-label">INVENTORY</p>
+              <h2 id="inventory-title">背包</h2><p id="backpack-level-label" class="backpack-level-label">背包等级 I · 4×3 · 12 格</p>
+            </div>
+            <button id="inventory-close-btn" class="icon-close-btn" type="button" aria-label="关闭背包">×</button>
+          </div>
+          <p class="modal-tip">单击物品后点击快捷栏即可装备；双击食物/医疗物品可直接使用，双击篝火/营地套件或家具可使用。选中物品后可丢弃整组，掉落物留在地上，可再捡回。</p>
+          <div id="inventory-grid" class="inventory-grid"></div>
+          <div class="inventory-footer">
+            <span id="inventory-selection-hint">选择一个物品</span>
+            <div class="inventory-footer-actions">
+              <button id="inventory-drop-btn" class="secondary-btn" type="button" disabled>丢弃选中物品</button>
+              <button id="inventory-done-btn" class="primary-btn" type="button">完成</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 制作、烹饪与资源图鉴 -->
+      <div id="crafting-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="crafting-title">
+        <div class="modal-panel crafting-panel">
+          <div class="modal-heading">
+            <div><p class="hud-label">SURVIVAL WORKBENCH</p><h2 id="crafting-title">制作与生存图鉴</h2></div>
+            <button id="crafting-close-btn" class="icon-close-btn" type="button" aria-label="关闭制作界面">×</button>
+          </div>
+          <div class="craft-tabs"><button id="craft-tab-btn" class="active" type="button">制造手册</button><span class="crafting-subtitle">分类浏览 · 可制作配方优先显示</span></div>
+          <section id="craft-tab-panel">
+            <p class="modal-tip">石斧才能砍树，石镐才能开采石林；工具有耐久，耗尽会损坏。工作台只能在自建营地内使用。可按顺序制作背包扩容配方，背包从 I 级 4×3 扩展到 V 级 6×6。</p>
+            <div class="crafting-layout"><nav id="craft-category-nav" class="craft-category-nav" aria-label="制造分类"></nav><div class="crafting-results"><div id="craft-category-summary" class="craft-category-summary"></div><div id="crafting-list" class="crafting-list"></div></div></div>
+            <button id="camp-upgrade-btn" class="secondary-btn camp-upgrade-btn" type="button">升级营地</button>
+            <button id="campfire-refuel-btn" class="secondary-btn camp-upgrade-btn" type="button">给附近篝火添柴（树枝 ×2）</button>
+          </section>
+        </div>
+      </div>
+
+      <!-- 独立生存图鉴：资源道具与怪物生物完全独立于制造界面 -->
+      <div id="compendium-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="compendium-title">
+        <div class="modal-panel compendium-panel">
+          <div class="modal-heading"><div><p class="hud-label">FIELD SURVIVAL ENCYCLOPEDIA</p><h2 id="compendium-title">生存图鉴</h2></div><button id="compendium-close-btn" class="icon-close-btn" type="button" aria-label="关闭生存图鉴">×</button></div>
+          <div class="craft-tabs compendium-tabs"><button id="compendium-items-tab" class="active" type="button">资源 / 道具</button><button id="compendium-creatures-tab" type="button">怪物 / 生物</button></div>
+          <p class="modal-tip" id="compendium-intro">记录已知材料、加工品、工具与生存用品。图标从 images/items/icons/ 读取。</p>
+          <div id="compendium-list" class="compendium-list"></div>
+          <div id="creature-compendium-list" class="creature-compendium-list hidden"></div>
+        </div>
+      </div>
+
+      <!-- 大地图：左侧任务导航，右侧地图 -->
+      <div id="map-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="map-title">
+        <div class="modal-panel map-panel">
+          <div class="modal-heading">
+            <div><p class="hud-label">WORLD MAP</p><h2 id="map-title">区域地图</h2></div>
+            <button id="map-close-btn" class="icon-close-btn" type="button" aria-label="关闭地图">×</button>
+          </div>
+          <div class="map-layout">
+            <aside class="map-quest-sidebar">
+              <div class="map-quest-tabs" role="tablist" aria-label="任务类型">
+                <button id="map-main-tab" class="active" type="button" role="tab" aria-selected="true">主线任务</button>
+                <button id="map-side-tab" type="button" role="tab" aria-selected="false">支线任务</button>
+              </div>
+              <p id="map-quest-caption" class="map-quest-caption">第一卷：无人回应的边境</p>
+              <div id="map-quest-list" class="map-quest-list"></div>
+              <div class="map-sidebar-tip">选择任务查看目标。金色标记代表当前主线线索。</div>
+            </aside>
+            <div class="map-main-area">
+              <div class="expanded-map-wrap"><canvas id="expanded-map-canvas" width="760" height="480"></canvas></div>
+              <div class="map-details">
+                <p id="expanded-world-position">坐标：0, 0</p>
+                <p><strong>当前任务：</strong><span id="expanded-current-task">探索周围环境。</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="quest-complete-banner" class="quest-complete-banner" aria-live="polite" aria-atomic="true">
+        <div class="quest-complete-check">✓</div>
+        <div class="quest-complete-copy"><span>任务完成</span><strong id="quest-complete-title">目标已完成</strong><small id="quest-next-title">新目标已更新</small></div>
+      </div>
+    </section>
+
+      <div id="quest-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="quest-modal-title">
+        <div class="modal-panel quest-panel">
+          <div class="modal-heading">
+            <div><p class="hud-label">CHAPTER QUESTS · VOLUME I</p><h2 id="quest-modal-title">第一卷：无人回应的边境</h2><p id="quest-progress-label" class="quest-progress-label">已完成 0/16 章</p></div>
+            <button id="quest-close-btn" class="icon-close-btn" type="button" aria-label="关闭任务日志">×</button>
+          </div>
+          <section class="quest-current-card">
+            <p class="quest-section-label">当前主线</p>
+            <h3 id="quest-current-title">第 1 章 · 坠机后的求生</h3>
+            <p id="quest-current-summary"></p>
+            <div class="quest-objective"><strong>任务目标</strong><p id="quest-current-objective"></p></div>
+            <div class="quest-hint"><strong>行动提示</strong><p id="quest-current-hint"></p></div>
+          </section>
+          <div class="quest-list-heading"><h3>第一卷任务记录</h3><span>完成后自动推进</span></div>
+          <div id="quest-chapter-list" class="quest-chapter-list"></div>
+          <p class="quest-footnote">剧情按小说第一卷 16 章编排。当前游戏用线索点承载尚未制作独立地图的剧情场景；已完成任务会随存档保留。</p>
+        </div>
+      </div>
+
+    <!-- 角色档案：保持原样 -->
+    <section id="profiles-screen" class="screen hidden">
+      <div class="simple-panel">
+        <p class="eyebrow">SURVIVOR DATABASE</p>
+        <h2>角色档案</h2>
+        <div id="profiles-list"></div>
+        <button id="profiles-back-btn">返回主菜单</button>
+      </div>
+    </section>
+
+    <!-- 设置模块：音量、环境音、音效和操作偏好 -->
+    <section id="settings-screen" class="screen hidden">
+      <div class="simple-panel settings-panel">
+        <p class="eyebrow">SETTINGS</p>
+        <h2>游戏设置</h2>
+        <p class="settings-intro">调整声音和操作偏好，设置会自动保存在当前浏览器。</p>
+
+        <div class="settings-group">
+          <h3>声音设置</h3>
+          <label class="setting-row" for="master-volume">
+            <span><strong>总音量</strong><small>控制所有游戏声音</small></span>
+            <input id="master-volume" type="range" min="0" max="100" value="70">
+            <output id="master-volume-value">70%</output>
+          </label>
+          <label class="setting-row" for="ambient-volume">
+            <span><strong>环境音量</strong><small>轻柔的荒野风声</small></span>
+            <input id="ambient-volume" type="range" min="0" max="100" value="12">
+            <output id="ambient-volume-value">12%</output>
+          </label>
+          <label class="setting-row" for="sfx-volume">
+            <span><strong>音效音量</strong><small>采集、使用物品和保存提示</small></span>
+            <input id="sfx-volume" type="range" min="0" max="100" value="45">
+            <output id="sfx-volume-value">45%</output>
+          </label>
+          <label class="setting-toggle" for="mute-audio">
+            <span><strong>静音</strong><small>一键关闭全部声音</small></span>
+            <input id="mute-audio" type="checkbox">
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <h3>画面设置</h3>
+          <label class="setting-toggle" for="reduce-camera-motion">
+            <span><strong>减少镜头移动</strong><small>角色可在画面中活动一段距离，降低整张地图持续滑动带来的眩晕感</small></span>
+            <input id="reduce-camera-motion" type="checkbox" checked>
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <h3>操作设置</h3>
+          <div class="setting-row">
+            <span><strong>移动方式</strong><small>支持 WASD 和方向键</small></span>
+            <span class="setting-static">键盘</span>
+          </div>
+          <div class="setting-row">
+            <span><strong>采集资源</strong><small>靠近资源后按 E</small></span>
+            <span class="setting-static">E</span>
+          </div>
+          <div class="setting-row">
+            <span><strong>使用快捷栏物品</strong><small>选择 1–5 号格后按 F</small></span>
+            <span class="setting-static">F</span>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button id="settings-reset-btn" class="secondary-btn" type="button">恢复默认</button>
+          <button id="settings-back-btn" type="button">返回主菜单</button>
+          <button id="settings-exit-btn" class="secondary-btn" type="button">退出游戏，返回标题</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="story-dialog" class="story-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="story-dialog-name">
+      <div id="story-dialog-portrait" class="story-dialog-portrait portrait-scout" aria-hidden="true"></div>
+      <div class="story-dialog-content">
+        <p class="story-dialog-kicker">STORY · SURVIVORS</p>
+        <h2 id="story-dialog-name">幸存者</h2>
+        <p id="story-dialog-text">对话内容。</p>
+        <div class="story-dialog-footer"><span>按 Enter / E 继续</span><button id="story-dialog-action" class="primary-btn" type="button">继续</button></div>
+      </div>
+    </div>
+    <div id="save-slot-modal" class="save-slot-modal hidden" role="dialog" aria-modal="true" aria-labelledby="save-slot-title">
+      <div class="save-slot-panel">
+        <div class="save-slot-heading"><div><p class="eyebrow">SAVE MANAGEMENT</p><h2 id="save-slot-title">选择存档</h2></div><button id="save-slot-close-btn" class="icon-close-btn" type="button" aria-label="关闭存档选择">×</button></div>
+        <p class="save-slot-intro">共 4 个存档位。新游戏可选择空档或覆盖旧档；游戏中按 P 可选择任意档位保存，自动保存写入当前档位。</p>
+        <div id="save-slot-list" class="save-slot-list"></div>
+      </div>
+    </div>
+    <div id="sleep-modal" class="sleep-modal hidden" role="dialog" aria-modal="true" aria-labelledby="sleep-title">
+      <div class="sleep-panel">
+        <div class="sleep-heading">
+          <div><p class="eyebrow">REST & RECOVER</p><h2 id="sleep-title">营地休息</h2></div>
+          <button id="sleep-close-btn" class="icon-close-btn" type="button" aria-label="关闭休息菜单">×</button>
+        </div>
+        <p class="sleep-intro">睡眠会推进游戏时间。每睡 1 小时，生命恢复 5 点，饥饿和水分各减少 5 点；饥饿与水分最低保留 5 点。</p>
+        <div class="sleep-actions">
+          <button id="sleep-3h-btn" class="primary-btn" type="button"><strong>睡一会</strong><span>休息 3 小时 · 生命 +15</span></button>
+          <button id="sleep-day-btn" type="button"><strong>睡到第二天 06:00</strong><span>快速度过剩余夜晚，恢复生命并消耗饥饿 / 水分</span></button>
+        </div>
+      </div>
+    </div>
+    <div id="death-overlay" class="death-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="death-title">
+      <div class="death-panel"><p class="eyebrow">SURVIVAL FAILED</p><h2 id="death-title">你在荒野中倒下了</h2><p>饥饿或缺水导致生命值归零。可以返回主菜单，选择其他存档，或重新开始并覆盖当前存档位。</p><div class="death-actions"><button id="death-menu-btn" type="button">返回主菜单</button><button id="death-restart-btn" class="primary-btn" type="button">重新开始本档</button></div></div>
+    </div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
