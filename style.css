@@ -173,8 +173,19 @@ button:disabled {
   background: var(--panel-light);
 }
 .character-icon {
-  font-size: 38px;
-  margin-bottom: 12px;
+  width: 130px;
+  height: 150px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.character-icon img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
 }
 .character-card h3 {
   margin: 8px 0;
@@ -1591,8 +1602,8 @@ button:disabled {
   image-rendering: pixelated;
 }
 #game-screen .inventory-grid .item-icon-image { width: 36px; height: 36px; }
-.recipe-icon-image { display:block; width:36px; height:36px; object-fit:contain; image-rendering:pixelated; padding:0; background:transparent; }
-.character-icon img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+.recipe-icon-image { display:block; width:36px; height:36px; object-fit:contain; image-rendering:auto; padding:0; background:transparent; }
+.character-icon img { width:100%; height:100%; object-fit:contain; image-rendering:auto; }
 
 
 /* v35：背包/图鉴专属图片素材与环境贴地融合 */
@@ -1654,7 +1665,7 @@ button:disabled {
 .compendium-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .creature-compendium-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .creature-card { display: grid; grid-template-columns: 132px minmax(0,1fr); gap: 13px; padding: 13px; border: 1px solid rgba(220,231,196,.18); border-radius: 11px; background: linear-gradient(135deg,rgba(57,65,42,.38),rgba(255,255,255,.025)); min-width: 0; }
-.creature-portrait { width: 132px; height: 132px; object-fit: contain; image-rendering: pixelated; background: radial-gradient(ellipse,rgba(151,163,108,.2),rgba(0,0,0,.15)); border-radius: 8px; }
+.creature-portrait { width: 132px; height: 132px; object-fit: contain; image-rendering: auto; background: radial-gradient(ellipse,rgba(151,163,108,.2),rgba(0,0,0,.15)); border-radius: 8px; }
 .creature-details { min-width: 0; }
 .creature-title-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .creature-title-row h3 { margin: 0; color:#f0edda; font-size:17px; }
@@ -1666,22 +1677,22 @@ button:disabled {
 .creature-details .creature-area { color:#d8d0ad; }
 .creature-drops { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:8px; font-size:10px; color:#b7c4a7; }
 .creature-drop-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 5px; border-radius:5px; background:rgba(0,0,0,.2); color:#e0e6d5; }
-.creature-drop-icon { width:18px; height:18px; object-fit:contain; image-rendering:pixelated; }
+.creature-drop-icon { width:18px; height:18px; object-fit:contain; image-rendering:auto; }
 @media(max-width:760px) { .crafting-layout { grid-template-columns:1fr; } .craft-category-nav { grid-template-columns:repeat(3,minmax(0,1fr)); position:static; } .craft-category-button { justify-content:center; padding:7px 4px; font-size:11px; } .craft-category-button img { width:22px;height:22px; } .compendium-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .creature-compendium-list { grid-template-columns:1fr; } .creature-card { grid-template-columns:92px minmax(0,1fr); } .creature-portrait { width:92px;height:110px; } #game-screen .compendium-open-btn { right:12px; bottom:125px; padding:9px 11px; font-size:11px; } }
 @media(max-width:480px) { .compendium-list { grid-template-columns:1fr; } .creature-card { grid-template-columns:76px minmax(0,1fr); gap:9px; padding:9px; } .creature-portrait { width:76px;height:90px; } }
 .recipe-material-missing { color:#efb0a0; border:1px solid rgba(194,91,72,.24); }
 .recipe-material-ready { color:#d5e9b8; border:1px solid rgba(132,178,91,.2); }
 
 /* v38：角色选择与角色档案统一使用项目内 PNG 资产，不再用 Emoji 代替角色头像。 */
-.character-icon img { display:block; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
-.profile-portrait { width:42px; height:42px; object-fit:contain; image-rendering:pixelated; vertical-align:middle; margin-right:10px; }
+.character-icon img { display:block; width:100%; height:100%; object-fit:contain; image-rendering:auto; }
+.profile-portrait { width:42px; height:42px; object-fit:contain; image-rendering:auto; vertical-align:middle; margin-right:10px; }
 .profile-item { display:grid; grid-template-columns:42px 1fr; align-items:center; column-gap:10px; }
 .profile-item p { grid-column:2; }
 
 /* v44：剧情对话框位于 game-screen 外部，必须使用全局选择器和 fixed 定位。 */
 .story-dialog { position:fixed; z-index:180; left:50%; bottom:22px; transform:translateX(-50%); width:min(820px,calc(100% - 34px)); display:grid; grid-template-columns:88px minmax(0,1fr); gap:18px; padding:18px 22px; border:1px solid rgba(226,204,150,.88); border-radius:12px; background:linear-gradient(115deg,rgba(16,25,22,.97),rgba(34,43,34,.97)); box-shadow:0 16px 45px rgba(0,0,0,.58),inset 0 0 0 2px rgba(255,255,255,.025); color:#f3ecd8; }
 .story-dialog.hidden { display:none; }
-.story-dialog-portrait { width:82px; height:96px; align-self:center; display:block; overflow:hidden; border:1px solid #a58d5c; border-radius:8px; background-color:#202e29; background-repeat:no-repeat; background-size:328px 102.5px; background-position:0 -3px; box-shadow:inset 0 0 18px #101713; image-rendering:pixelated; animation:dialogue-character-idle .9s steps(4,end) infinite; }
+.story-dialog-portrait { width:82px; height:96px; align-self:center; display:block; overflow:hidden; border:1px solid #a58d5c; border-radius:8px; background-color:#202e29; background-repeat:no-repeat; background-size:328px 96px; background-position:0 0; box-shadow:inset 0 0 18px #101713; image-rendering:auto; animation:dialogue-character-idle .9s steps(4,end) infinite; }
 .story-dialog-portrait.portrait-scout { background-image:url("./images/characters/scout_dialogue.png"); }
 .story-dialog-portrait.portrait-mechanic { background-image:url("./images/characters/mechanic_dialogue.png"); }
 .story-dialog-portrait.portrait-medic { background-image:url("./images/characters/medic_dialogue.png"); }
@@ -1698,3 +1709,206 @@ button:disabled {
 #story-dialog.story-dialog:not(.hidden) { position:fixed !important; left:50% !important; bottom:22px !important; transform:translateX(-50%) !important; width:min(820px,calc(100% - 34px)) !important; display:grid !important; visibility:visible !important; opacity:1 !important; pointer-events:auto !important; z-index:999999 !important; }
 @media(max-width:600px) { #story-dialog.story-dialog:not(.hidden) { bottom:8px !important; width:calc(100% - 16px) !important; } }
 #story-dialog .primary-btn:focus-visible { outline:3px solid #f3d48b; outline-offset:3px; }
+
+/* ===================================================
+   v45: 移动设备触控控制器（虚拟方向盘与虚拟操作按键）
+   =================================================== */
+.virtual-controls {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 95;
+  display: block;
+}
+.virtual-controls.hidden {
+  display: none !important;
+}
+
+/* 左下角：虚拟方向盘 / 摇杆 */
+.vjoystick-container {
+  position: absolute;
+  left: 22px;
+  bottom: 26px;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.vjoystick-base {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(20, 36, 28, 0.72) 0%, rgba(10, 20, 15, 0.90) 100%);
+  border: 2px solid rgba(216, 193, 127, 0.55);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), inset 0 0 16px rgba(100, 240, 200, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vjoy-mark {
+  position: absolute;
+  color: rgba(220, 200, 150, 0.45);
+  font-size: 11px;
+  pointer-events: none;
+}
+.mark-n { top: 6px; }
+.mark-s { bottom: 6px; }
+.mark-w { left: 8px; }
+.mark-e { right: 8px; }
+
+.vjoystick-knob {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f2d58a 0%, #aa823a 65%, #63471b 100%);
+  border: 2px solid #fff3c4;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  transform: translate(0px, 0px);
+  transition: transform 0.04s ease-out;
+  pointer-events: none;
+}
+.vjoystick-knob.released {
+  transition: transform 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+/* 右下角：触控按键区 */
+.vbuttons-container {
+  position: absolute;
+  right: 18px;
+  bottom: 22px;
+  width: 220px;
+  height: 170px;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.vbtn {
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.vbtn:active {
+  transform: scale(0.90) !important;
+}
+
+/* 主攻击键 */
+.vbtn-attack {
+  position: absolute;
+  right: 6px;
+  bottom: 8px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #e74c3c 0%, #a93226 70%, #641e16 100%);
+  border: 2.5px solid #ffc2bb;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 14px rgba(231, 76, 60, 0.5);
+  color: #fff;
+  transition: transform 0.1s;
+}
+.vbtn-attack .vbtn-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.vbtn-attack .vbtn-text {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* 交互键 */
+.vbtn-interact {
+  position: absolute;
+  right: 94px;
+  bottom: 20px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #27ae60 0%, #196f3d 70%, #114b29 100%);
+  border: 2px solid #abebc6;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5), 0 0 10px rgba(39, 174, 96, 0.4);
+  color: #fff;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+.vbtn-interact .vbtn-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.vbtn-interact .vbtn-text {
+  font-size: 10px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.vbtn-interact.pulse-ready {
+  animation: vbtn-interact-pulse 0.9s infinite alternate;
+}
+@keyframes vbtn-interact-pulse {
+  from {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 8px rgba(39, 174, 96, 0.4);
+    border-color: #abebc6;
+  }
+  to {
+    box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 20px rgba(46, 204, 113, 0.85);
+    border-color: #ffffff;
+    transform: scale(1.05);
+  }
+}
+
+/* 辅助功能按键群 */
+.vbtn-sub-group {
+  position: absolute;
+  right: 8px;
+  bottom: 96px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.vbtn-sub {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #34495e 0%, #212f3d 70%, #17202a 100%);
+  border: 1.5px solid rgba(216, 193, 127, 0.65);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  font-size: 18px;
+  color: #f5eedb;
+  transition: transform 0.1s;
+}
+.vbtn-leave {
+  background: radial-gradient(circle at 35% 35%, #d35400 0%, #873600 70%, #4e1f00 100%);
+  border-color: #f8c471;
+  font-size: 16px;
+}
+.vbtn-leave.hidden {
+  display: none !important;
+}
+
+/* 移动端模式适配 */
+body.touch-device-mode .controls-hint {
+  display: none !important;
+}
+body.touch-device-mode #hotbar {
+  bottom: 22px;
+  transform: translateX(-50%) scale(0.95);
+}
+body.touch-device-mode .crafting-open-btn,
+body.touch-device-mode .compendium-open-btn,
+body.touch-device-mode .inventory-open-btn {
+  display: none !important;
+}
+

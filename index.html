@@ -148,6 +148,41 @@
         <span>背包</span>
       </button>
 
+      <!-- 移动设备触控控制器（方向盘与操作按键，电脑端自动隐藏） -->
+      <div id="virtual-controls" class="virtual-controls hidden" aria-label="移动端虚拟按键与方向盘">
+        <!-- 左下角：虚拟方向盘 / 摇杆 -->
+        <div id="vjoystick-container" class="vjoystick-container">
+          <div id="vjoystick-base" class="vjoystick-base">
+            <span class="vjoy-mark mark-n">▲</span>
+            <span class="vjoy-mark mark-e">▶</span>
+            <span class="vjoy-mark mark-s">▼</span>
+            <span class="vjoy-mark mark-w">◀</span>
+            <div id="vjoystick-knob" class="vjoystick-knob"></div>
+          </div>
+        </div>
+
+        <!-- 右下角：移动端触控按键 -->
+        <div id="vbuttons-container" class="vbuttons-container">
+          <!-- 主攻击按键 -->
+          <button id="vbtn-attack" class="vbtn vbtn-attack" type="button" aria-label="攻击">
+            <span class="vbtn-icon">⚔</span>
+            <span class="vbtn-text">攻击</span>
+          </button>
+          <!-- 交互按键 -->
+          <button id="vbtn-interact" class="vbtn vbtn-interact" type="button" aria-label="交互">
+            <span class="vbtn-icon">✋</span>
+            <span class="vbtn-text">交互 (E)</span>
+          </button>
+          <!-- 辅助快捷按键：背包、制造、地图、离开 -->
+          <div class="vbtn-sub-group">
+            <button id="vbtn-bag" class="vbtn vbtn-sub" type="button" aria-label="背包" title="背包">🎒</button>
+            <button id="vbtn-craft" class="vbtn vbtn-sub" type="button" aria-label="制造" title="制造">🔨</button>
+            <button id="vbtn-map" class="vbtn vbtn-sub" type="button" aria-label="地图" title="地图">🗺</button>
+            <button id="vbtn-leave" class="vbtn vbtn-sub vbtn-leave hidden" type="button" aria-label="离开区域" title="离开区域">🚪</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 背包弹窗 -->
       <div id="inventory-modal" class="game-modal hidden" role="dialog" aria-modal="true" aria-labelledby="inventory-title">
         <div class="modal-panel inventory-panel">
@@ -301,12 +336,24 @@
         <div class="settings-group">
           <h3>操作设置</h3>
           <div class="setting-row">
-            <span><strong>移动方式</strong><small>支持 WASD 和方向键</small></span>
-            <span class="setting-static">键盘</span>
+            <span><strong>操作与设备模式</strong><small>智能分析手机/电脑，手机呈现虚拟方向盘与按键</small></span>
+            <select id="control-scheme-select" style="background:#202e26;color:#f2e6cb;border:1px solid #c8b27a;border-radius:6px;padding:4px 8px;font-size:13px;">
+              <option value="auto">自动分析 (手机触控 / 电脑键鼠)</option>
+              <option value="touch">触控模式 (启用屏幕方向盘与按键)</option>
+              <option value="pc">电脑模式 (纯键鼠，隐藏触控键)</option>
+            </select>
           </div>
           <div class="setting-row">
-            <span><strong>采集资源</strong><small>靠近资源后按 E</small></span>
-            <span class="setting-static">E</span>
+            <span><strong>移动方式</strong><small>8方向移动：键盘 WASD / 方向键，手机端滑动方向盘</small></span>
+            <span class="setting-static">八向自由</span>
+          </div>
+          <div class="setting-row">
+            <span><strong>攻击与打击</strong><small>打击跟随人物朝向；按 F / 空格 / 点击，手机端点击攻击键</small></span>
+            <span class="setting-static">面向打击</span>
+          </div>
+          <div class="setting-row">
+            <span><strong>采集与交互</strong><small>靠近目标后按 E，手机端点击交互键</small></span>
+            <span class="setting-static">E / 触控按键</span>
           </div>
           <div class="setting-row">
             <span><strong>使用快捷栏物品</strong><small>选择 1–5 号格后按 F</small></span>

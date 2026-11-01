@@ -1,3 +1,226 @@
+
+// ===================================================================
+// 设备适配与触控控制器系统（电脑设备 vs 手机移动设备自动分析与适配）
+// ===================================================================
+const virtualJoystickState = {
+  active: false,
+  dx: 0,
+  dy: 0,
+  touchId: null,
+  startX: 0,
+  startY: 0
+};
+
+const DeviceController = (() => {
+  let isMobile = false;
+  let userPref = localStorage.getItem("wilderness_control_scheme") || "auto";
+
+  function detectDevice() {
+    if (userPref === "touch") return true;
+    if (userPref === "pc") return false;
+    const ua = navigator.userAgent || "";
+    const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i;
+    const hasTouch = navigator.maxTouchPoints > 0 || ("ontouchstart" in window);
+    const isSmall = window.innerWidth <= 960;
+    return Boolean(mobileRegex.test(ua) || (hasTouch && isSmall));
+  }
+
+  function applyDeviceMode() {
+    isMobile = detectDevice();
+    const virtualControls = document.querySelector("#virtual-controls");
+    if (isMobile) {
+      document.body.classList.add("touch-device-mode");
+      if (virtualControls) virtualControls.classList.remove("hidden");
+    } else {
+      document.body.classList.remove("touch-device-mode");
+      if (virtualControls) virtualControls.classList.add("hidden");
+    }
+  }
+
+  function initVirtualControls() {
+    const schemeSelect = document.querySelector("#control-scheme-select");
+    if (schemeSelect) {
+      schemeSelect.value = userPref;
+      schemeSelect.onchange = () => {
+        userPref = schemeSelect.value;
+        localStorage.setItem("wilderness_control_scheme", userPref);
+        applyDeviceMode();
+      };
+    }
+    applyDeviceMode();
+    window.addEventListener("resize", applyDeviceMode);
+
+    const base = document.querySelector("#vjoystick-base");
+    const knob = document.querySelector("#vjoystick-knob");
+    const container = document.querySelector("#vjoystick-container");
+
+    if (container && base && knob) {
+      const maxDistance = 46;
+
+      function handleJoystickMove(clientX, clientY) {
+        const rect = base.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        let deltaX = clientX - centerX;
+        let deltaY = clientY - centerY;
+        const dist = Math.hypot(deltaX, deltaY);
+
+        if (dist > maxDistance) {
+          deltaX = (deltaX / dist) * maxDistance;
+          deltaY = (deltaY / dist) * maxDistance;
+        }
+
+        knob.classList.remove("released");
+        knob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+        // 死区判断
+        if (dist > 8) {
+          virtualJoystickState.active = true;
+          virtualJoystickState.dx = deltaX / maxDistance;
+          virtualJoystickState.dy = deltaY / maxDistance;
+        } else {
+          virtualJoystickState.active = false;
+          virtualJoystickState.dx = 0;
+          virtualJoystickState.dy = 0;
+        }
+      }
+
+      function handleJoystickEnd() {
+        virtualJoystickState.active = false;
+        virtualJoystickState.dx = 0;
+        virtualJoystickState.dy = 0;
+        virtualJoystickState.touchId = null;
+        knob.classList.add("released");
+        knob.style.transform = "translate(0px, 0px)";
+      }
+
+      // 触控事件 (Touch Events)
+      container.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        virtualJoystickState.touchId = touch.identifier;
+        handleJoystickMove(touch.clientX, touch.clientY);
+      }, { passive: false });
+
+      window.addEventListener("touchmove", (e) => {
+        if (virtualJoystickState.touchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === virtualJoystickState.touchId) {
+            e.preventDefault();
+            handleJoystickMove(touch.clientX, touch.clientY);
+            break;
+          }
+        }
+      }, { passive: false });
+
+      window.addEventListener("touchend", (e) => {
+        if (virtualJoystickState.touchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === virtualJoystickState.touchId) {
+            handleJoystickEnd();
+            break;
+          }
+        }
+      });
+
+      window.addEventListener("touchcancel", (e) => {
+        if (virtualJoystickState.touchId !== null) handleJoystickEnd();
+      });
+
+      // Pointer 事件支持（兼容电脑触屏与调试）
+      container.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && !isMobile) return;
+        container.setPointerCapture?.(e.pointerId);
+        handleJoystickMove(e.clientX, e.clientY);
+      });
+      container.addEventListener("pointermove", (e) => {
+        if (virtualJoystickState.active) {
+          handleJoystickMove(e.clientX, e.clientY);
+        }
+      });
+      container.addEventListener("pointerup", handleJoystickEnd);
+      container.addEventListener("pointercancel", handleJoystickEnd);
+    }
+
+    // 绑定触控按键
+    const btnAttack = document.querySelector("#vbtn-attack");
+    const btnInteract = document.querySelector("#vbtn-interact");
+    const btnBag = document.querySelector("#vbtn-bag");
+    const btnCraft = document.querySelector("#vbtn-craft");
+    const btnMap = document.querySelector("#vbtn-map");
+    const btnLeave = document.querySelector("#vbtn-leave");
+
+    function bindTouchAction(el, action) {
+      if (!el) return;
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        action();
+      });
+      el.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        action();
+      }, { passive: false });
+    }
+
+    bindTouchAction(btnAttack, () => {
+      performAttack();
+    });
+
+    bindTouchAction(btnInteract, () => {
+      interactWithWorld();
+    });
+
+    bindTouchAction(btnBag, () => {
+      if (inventoryModal.classList.contains("hidden")) openInventory();
+      else closeInventory();
+    });
+
+    bindTouchAction(btnCraft, () => {
+      if (craftingModal.classList.contains("hidden")) openCrafting("recipes");
+      else closeCrafting();
+    });
+
+    bindTouchAction(btnMap, () => {
+      if (mapModal.classList.contains("hidden")) openExpandedMap();
+      else closeExpandedMap();
+    });
+
+    bindTouchAction(btnLeave, () => {
+      if (gameState.location === "aircraft") leaveAircraft();
+      else if (gameState.location === "cabin") leaveAbandonedCabin();
+      else if (gameState.location === "ancientRuins") leaveAncientRuins();
+      else if (gameState.location === "pirateShip") leavePirateShip();
+      else if (gameState.location === "camp") leaveCamp();
+    });
+  }
+
+  // 动态更新交互按键状态与离开按钮状态
+  function updatePromptState() {
+    const btnInteract = document.querySelector("#vbtn-interact");
+    const prompt = document.querySelector("#interaction-prompt");
+    if (btnInteract && prompt) {
+      if (!prompt.classList.contains("hidden")) {
+        btnInteract.classList.add("pulse-ready");
+      } else {
+        btnInteract.classList.remove("pulse-ready");
+      }
+    }
+    const btnLeave = document.querySelector("#vbtn-leave");
+    if (btnLeave) {
+      if (["aircraft", "cabin", "ancientRuins", "pirateShip", "camp"].includes(gameState.location)) {
+        btnLeave.classList.remove("hidden");
+      } else {
+        btnLeave.classList.add("hidden");
+      }
+    }
+  }
+
+  return { init: initVirtualControls, update: updatePromptState, isMobile: () => isMobile };
+})();
+
 "use strict";
 const AUDIO_SETTINGS_KEY = "wilderness-survival-audio-settings-v1";
 const DEFAULT_AUDIO_SETTINGS = { master: 70, ambient: 12, sfx: 45, mute: false };
@@ -100,7 +323,18 @@ const AssetManager = (() => {
     tileGrass:"images/tiles/grass.png", tileForest:"images/tiles/forest.png", tileMeadow:"images/tiles/meadow.png", tileDirt:"images/tiles/dirt.png", tileSand:"images/tiles/sand.png", tileRocky:"images/tiles/rocky.png", tileWater:"images/tiles/water.png", tileShallowWater:"images/tiles/shallow_water.png",
     tree:"images/environment/tree.png", treeStump:"images/environment/tree_stump.png", rock:"images/environment/rock.png", highGrass:"images/environment/high_grass.png", berryBush:"images/environment/berry_bush.png", branch:"images/environment/branch.png", stonePile:"images/environment/stone_pile.png", campfire:"images/environment/campfire.png", plant:"images/environment/plant.png",
     scout:"images/characters/scout.png", medic:"images/characters/medic.png", mechanic:"images/characters/mechanic.png", hunter:"images/characters/hunter.png",
-    stoneAxe:"images/items/stone_axe.png", sword:"images/items/sword.png", berry:"images/items/berry.png", wood:"images/items/wood.png", aircraftWreck:"images/landmarks/aircraft_wreck.png"
+    stoneAxe:"images/items/stone_axe.png", sword:"images/items/sword.png", berry:"images/items/berry.png", wood:"images/items/wood.png",
+    aircraftWreck:"images/landmarks/aircraft_wreck.png", ancientRuins:"images/landmarks/ancient_ruins.png", mysticAltar:"images/landmarks/mystic_altar.png",
+    abandonedCabin:"images/landmarks/abandoned_cabin.png", pirateWreck:"images/landmarks/pirate_ship.png", fishingPier:"images/landmarks/fishing_pier.png",
+    supplyCrate:"images/landmarks/supply_crate.png", campEntrance:"images/landmarks/camp_entrance.png",
+    airplaneFloor:"images/interiors/airplane_floor.png", airplaneWall:"images/interiors/airplane_wall.png", airplaneSeats:"images/interiors/airplane_seats.png",
+    airplaneCockpit:"images/interiors/airplane_cockpit.png", airplaneCargo:"images/interiors/airplane_cargo.png",
+    cabinFloor:"images/interiors/cabin_floor.png", cabinWall:"images/interiors/cabin_wall.png", fireplace:"images/interiors/fireplace.png",
+    rangerDesk:"images/interiors/ranger_desk.png", survivorBed:"images/interiors/survivor_bed.png", mysticCore:"images/interiors/mystic_core.png",
+    ruinsFloor:"images/interiors/ruins_floor.png", ruinsWall:"images/interiors/ruins_wall.png", ruinsPillar:"images/interiors/ruins_pillar.png",
+    ruinsAltar:"images/interiors/ruins_altar.png", ruinsChest:"images/interiors/ruins_chest.png",
+    shipFloor:"images/interiors/ship_floor.png", shipWall:"images/interiors/ship_wall.png", shipCannon:"images/interiors/ship_cannon.png",
+    treasurePile:"images/interiors/treasure_pile.png", captainsDesk:"images/interiors/captains_desk.png"
   };
   const images = Object.create(null), warned = new Set();
   const groundedAssets = new Set(["tree", "treeStump", "rock", "highGrass", "berryBush", "branch", "stonePile", "campfire", "plant", "wood", "berry"]);
@@ -112,13 +346,28 @@ const AssetManager = (() => {
   }
   function draw(key, targetCtx, x, y, w, h) {
     const img = images[key]; if (!img || !img.complete || !img.naturalWidth) return false;
-    targetCtx.save(); targetCtx.imageSmoothingEnabled = false;
+    targetCtx.save();
+    targetCtx.imageSmoothingEnabled = true;
+    targetCtx.imageSmoothingQuality = "high";
     // 环境物件先落一层贴地阴影，避免透明 PNG 像贴纸一样浮在地表上。
     if (groundedAssets.has(key)) {
-      targetCtx.fillStyle = "rgba(18, 24, 16, 0.24)";
+      targetCtx.fillStyle = "rgba(18, 24, 16, 0.28)";
       targetCtx.beginPath(); targetCtx.ellipse(Math.round(x + w * 0.5), Math.round(y + h * 0.88), Math.max(5, w * 0.31), Math.max(2, h * 0.075), 0, 0, Math.PI * 2); targetCtx.fill();
     }
     targetCtx.drawImage(img, Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+    targetCtx.restore(); return true;
+  }
+  function drawTiled(key, targetCtx, x, y, w, h, tileSize = 64) {
+    const img = images[key]; if (!img || !img.complete || !img.naturalWidth) return false;
+    targetCtx.save();
+    targetCtx.beginPath();
+    targetCtx.rect(x, y, w, h);
+    targetCtx.clip();
+    for (let ty = y; ty < y + h; ty += tileSize) {
+      for (let tx = x; tx < x + w; tx += tileSize) {
+        targetCtx.drawImage(img, tx, ty, Math.min(tileSize, x + w - tx), Math.min(tileSize, y + h - ty));
+      }
+    }
     targetCtx.restore(); return true;
   }
   function get(key) {
@@ -129,7 +378,7 @@ const AssetManager = (() => {
     }
     const img = images[key]; return img && img.complete && img.naturalWidth ? img : null;
   }
-  return Object.freeze({ draw, get, definitions });
+  return Object.freeze({ draw, drawTiled, get, definitions });
 })();
 
 // v33：可选角色精灵表。约定文件为 images/characters/{角色ID}_walk.png，
@@ -210,6 +459,7 @@ const gameState = {
     speed: 180,
     size: 22,
     facing: "down",
+    facingVector: { dx: 0, dy: 1 },
     moving: false,
     walkTime: 0,
     actionUntil: 0,
@@ -957,7 +1207,7 @@ let interactionHintElapsed = 0;
 const interactionNames = {
   tree: "树木", treeStump: "树桩", fruitTree: "野果树", log: "倒木", driftwood: "漂流木", aircraftWreck: "坠毁飞机残骸", playerCamp: "自建营地",
   rock: "石林岩块", stonePile: "零碎石块", branch: "树枝", reeds: "芦苇", mushroom: "菌菇",
-  bush: "浆果灌木", flower: "野花", berries: "浆果灌木", campEntrance: "自建营地入口", cabinEntrance: "废弃木屋入口", waterSource: "河水取水点", riverGate: "碎石河谷入口", ridgeGate: "断脊高地入口", regionExit: "返回初始地图", regionCrate: "巡护员补给箱", storyPoint: "剧情线索", medicinalHerb: "止血草", ore: "铁矿脉", copperOre: "铜矿脉", silverOre: "银矿脉", goldOre: "金矿脉", pebbleNode: "河谷鹅卵石", highGrass: "高草丛"
+  bush: "浆果灌木", flower: "野花", berries: "浆果灌木", campEntrance: "自建营地入口", cabinEntrance: "废弃木屋入口", waterSource: "河水取水点", riverGate: "碎石河谷入口", ridgeGate: "断脊高地入口", regionExit: "返回初始地图", regionCrate: "巡护员补给箱", storyPoint: "剧情线索", medicinalHerb: "止血草", ore: "铁矿脉", copperOre: "铜矿脉", silverOre: "银矿脉", goldOre: "金矿脉", pebbleNode: "河谷鹅卵石", highGrass: "高草丛", ancientRuins: "失落神殿遗迹", mysticAltar: "荒野古代神龛", abandonedCamp: "废弃探险家营地", pirateWreck: "浅滩海盗沉船", supplyCrate: "空投物资箱", fishingPier: "河畔垂钓码头", richOre: "富集高纯矿脉"
 };
 const interactionPrompt = document.querySelector("#interaction-prompt");
 function worldObjectId(col, row) { return `${col},${row}`; }
@@ -1029,6 +1279,90 @@ function createWorldObjects() {
 // ================================
 // v23：飞机残骸实体与独立双层内部地图
 // ================================
+
+// =========================================
+// 探索与大地图可玩性系统（新增可探索地标与设施）
+// =========================================
+function drawAncientRuins(x, y, obj) {
+  if (AssetManager.draw("ancientRuins", ctx, x - 80, y - 128, 192, 154)) {
+    // 古代青蓝符文微光粒子
+    const pulse = 0.5 + Math.sin(performance.now() / 280) * 0.5;
+    ctx.fillStyle = `rgba(100, 240, 255, ${pulse * 0.7})`;
+    ctx.beginPath(); ctx.arc(x + 16, y - 24, 18, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  ctx.save(); ctx.fillStyle = "rgba(10,16,12,.36)"; ctx.beginPath(); ctx.ellipse(x + 16, y + 28, 38, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#4a5246"; ctx.fillRect(x - 14, y + 16, 60, 10); ctx.fillStyle = "#6b7765"; ctx.fillRect(x - 10, y + 10, 52, 7);
+  ctx.fillStyle = "#3e473b"; ctx.fillRect(x - 8, y - 22, 10, 32); ctx.fillRect(x + 30, y - 18, 10, 28);
+  ctx.fillStyle = "#2c362d"; ctx.fillRect(x + 8, y - 36, 16, 46); ctx.restore();
+}
+
+function drawMysticAltar(x, y, obj) {
+  if (AssetManager.draw("mysticAltar", ctx, x - 48, y - 96, 128, 128)) {
+    const glow = 0.5 + Math.sin(performance.now() / 320) * 0.5;
+    ctx.fillStyle = `rgba(160, 255, 200, ${glow * 0.35})`;
+    ctx.beginPath(); ctx.arc(x + 16, y - 14, 22 + glow * 5, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  ctx.save(); ctx.fillStyle = "rgba(12,18,14,.32)"; ctx.beginPath(); ctx.ellipse(x + 16, y + 26, 26, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#474b3e"; ctx.fillRect(x, y + 8, 32, 18); ctx.restore();
+}
+
+function drawAbandonedCamp(x, y, obj) {
+  if (AssetManager.draw("abandonedCabin", ctx, x - 64, y - 96, 160, 137)) return;
+  ctx.save(); ctx.fillStyle = "rgba(8,12,8,.34)"; ctx.beginPath(); ctx.ellipse(x + 16, y + 26, 32, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#4a4435"; ctx.fillRect(x - 8, y - 8, 44, 30); ctx.restore();
+}
+
+function drawPirateWreck(x, y, obj) {
+  if (AssetManager.draw("pirateWreck", ctx, x - 90, y - 110, 216, 156)) return;
+  ctx.save(); ctx.fillStyle = "rgba(18,14,8,.32)"; ctx.beginPath(); ctx.ellipse(x + 16, y + 28, 36, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#784b25"; ctx.fillRect(x + 10, y + 14, 18, 14); ctx.restore();
+}
+
+function drawSupplyCrate(x, y, obj) {
+  if (AssetManager.draw("supplyCrate", ctx, x - 16, y - 32, 64, 64)) return;
+  ctx.save(); ctx.fillStyle = "rgba(8,12,8,.30)"; ctx.beginPath(); ctx.ellipse(x + 16, y + 26, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#5d6d4a"; ctx.fillRect(x + 4, y + 8, 24, 18); ctx.restore();
+}
+
+function drawFishingPier(x, y, obj) {
+  if (AssetManager.draw("fishingPier", ctx, x - 28, y - 40, 88, 80)) return;
+  ctx.save(); ctx.fillStyle = "#63472c"; ctx.fillRect(x + 6, y - 4, 20, 36); ctx.restore();
+}
+
+function drawRichOreNode(x, y, obj) {
+  ctx.save();
+  ctx.fillStyle = "rgba(10,14,18,.35)";
+  ctx.beginPath(); ctx.ellipse(x + 16, y + 26, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+  // 重黑岩基石
+  ctx.fillStyle = "#4a4e52";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + 24); ctx.lineTo(x + 8, y + 8); ctx.lineTo(x + 26, y + 6);
+  ctx.lineTo(x + 30, y + 24); ctx.fill();
+  // 晶体矿石面颜色
+  const oreType = obj.oreType || "ironOre";
+  const oreColors = {
+    goldOre: ["#ffd54f", "#fff59d", "#ffb300"],
+    silverOre: ["#b0bec5", "#eceff1", "#78909c"],
+    copperOre: ["#ff7043", "#ffab91", "#d84315"],
+    ironOre: ["#90a4ae", "#cfd8dc", "#546e7a"]
+  };
+  const [colBase, colLight, colDark] = oreColors[oreType] || oreColors.ironOre;
+  // 闪烁晶石簇
+  ctx.fillStyle = colBase;
+  ctx.beginPath(); ctx.moveTo(x + 10, y + 16); ctx.lineTo(x + 16, y + 4); ctx.lineTo(x + 22, y + 16); ctx.fill();
+  ctx.fillStyle = colLight;
+  ctx.beginPath(); ctx.moveTo(x + 14, y + 16); ctx.lineTo(x + 16, y + 4); ctx.lineTo(x + 18, y + 16); ctx.fill();
+  // 闪烁高光点
+  const sparkle = (Math.sin(performance.now() / 200 + (obj.col + obj.row)) + 1) * 0.5;
+  if (sparkle > 0.6) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x + 15, y + 5, 2, 2);
+  }
+  ctx.restore();
+}
+
 function drawAircraftWreck(x, y) {
   if (AssetManager.draw("aircraftWreck", ctx, x - 8, y - 2, 256, 128)) { ctx.save(); ctx.fillStyle="#f5d36f"; ctx.font="bold 12px sans-serif"; ctx.textAlign="center"; ctx.fillText("E 进入残骸",x+112,y+117); ctx.restore(); return; }
 
@@ -1168,70 +1502,53 @@ function drawAircraftContainer(container) {
 function drawAircraftInterior() {
   const w = canvas.width, h = canvas.height, upper = gameState.aircraftFloor === "upper";
   ctx.clearRect(0, 0, w, h);
-  // 内部地图采用与野外地图一致的固定像素格、地面贴花、实体投影和清晰边界。
-  ctx.fillStyle = "#171f1d"; ctx.fillRect(0,0,w,h);
-  const left=Math.round(w*.12), top=Math.round(h*.12), width=Math.round(w*.76), height=Math.round(h*.75);
-  ctx.fillStyle="#5a625d";ctx.fillRect(left,top,width,height);
-  ctx.fillStyle="#9ba49a";ctx.fillRect(left+5,top+5,width-10,6);ctx.fillRect(left+5,top+height-11,width-10,6);
-  ctx.fillStyle="#303936";ctx.fillRect(left+12,top+14,width-24,height-28);
-  const tile=32;
-  for(let y=top+18;y<top+height-18;y+=tile){for(let x=left+16;x<left+width-16;x+=tile){
-    const variation=((Math.floor(x/tile)*17+Math.floor(y/tile)*31)%7);
-    ctx.fillStyle=variation===0?"#515b55":variation===1?"#454f4a":"#3e4843";ctx.fillRect(x,y,tile-1,tile-1);
-    ctx.fillStyle="rgba(185,190,173,.12)";ctx.fillRect(x+3,y+3,tile-7,2);
-    ctx.strokeStyle="rgba(14,22,19,.35)";ctx.strokeRect(x+.5,y+.5,tile-1,tile-1);
-  }}
-  // 机身框架和弯曲侧壁
-  ctx.fillStyle="#747d75";ctx.fillRect(left+7,top+12,9,height-24);ctx.fillRect(left+width-16,top+12,9,height-24);
-  ctx.fillStyle="#bbc0b1";for(let y=top+26;y<top+height-20;y+=46){ctx.fillRect(left+8,y,7,3);ctx.fillRect(left+width-15,y,7,3);}
-  // 侧壁窗框和外部冷光
-  for(let i=0;i<7;i++){const x=left+32+i*(width-64)/7;ctx.fillStyle="#263633";ctx.fillRect(x,top+21,22,11);ctx.fillStyle="#75999a";ctx.fillRect(x+3,top+23,16,6);ctx.fillStyle="rgba(181,215,204,.35)";ctx.fillRect(x+4,top+23,4,2);}
-  // 每层都有明显的中央通道和断裂金属片
-  ctx.fillStyle="#777d70";ctx.fillRect(w*.465,top+25,w*.07,height-50);
-  ctx.fillStyle="#9c9c88";ctx.fillRect(w*.49,top+25,3,height-50);ctx.fillRect(w*.52,top+25,2,height-50);
-  ctx.fillStyle="#222a27";ctx.beginPath();ctx.moveTo(w*.57,h*.53);ctx.lineTo(w*.65,h*.49);ctx.lineTo(w*.72,h*.63);ctx.lineTo(w*.64,h*.71);ctx.lineTo(w*.59,h*.65);ctx.closePath();ctx.fill();
-  ctx.strokeStyle="#9ba49a";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w*.58,h*.55);ctx.lineTo(w*.65,h*.51);ctx.lineTo(w*.70,h*.64);ctx.stroke();
-  if(!upper){
-    // 下层客舱：真实客机的 2+2 座椅排布，中间留出连续过道；每把椅子独立建模。
-    for(let r=0;r<4;r++) for(const sx of [.235,.292,.651,.708]) {
-      const x=w*sx, y=h*(.245+r*.112), sw=w*.043, sh=h*.070;
-      ctx.fillStyle="rgba(0,0,0,.32)";ctx.beginPath();ctx.ellipse(x+sw*.5,y+sh*.92,sw*.62,sh*.18,0,0,Math.PI*2);ctx.fill();
-      // 金属椅脚与底座
-      ctx.fillStyle="#202925";ctx.fillRect(x+sw*.17,y+sh*.62,3,sh*.34);ctx.fillRect(x+sw*.72,y+sh*.62,3,sh*.34);
-      ctx.fillStyle="#899087";ctx.fillRect(x+sw*.08,y+sh*.83,sw*.84,3);
-      // 椅背：深色外壳、布面、侧翼与头枕
-      ctx.fillStyle="#1c2925";ctx.fillRect(x,y,sw,sh*.66);
-      ctx.fillStyle=r%2?"#52685d":"#455e54";ctx.fillRect(x+3,y+3,sw-6,sh*.46);
-      ctx.fillStyle="#819183";ctx.fillRect(x+5,y+4,Math.max(2,sw*.13),sh*.34);
-      ctx.fillStyle="#263b33";ctx.fillRect(x+sw*.28,y+sh*.08,sw*.47,sh*.14);
-      ctx.fillStyle="#b2a98c";ctx.fillRect(x+sw*.16,y+sh*.51,sw*.68,sh*.13);
-      ctx.fillStyle="#303b34";ctx.fillRect(x+sw*.1,y+sh*.65,sw*.8,sh*.13);
-      ctx.fillStyle="#b8b5a0";ctx.fillRect(x+sw*.82,y+sh*.48,3,sh*.19);
-      ctx.strokeStyle="#a5ad9d";ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,sw-1,sh*.68);
+  ctx.fillStyle = "#121816"; ctx.fillRect(0, 0, w, h);
+  const left = Math.round(w * 0.12), top = Math.round(h * 0.12), width = Math.round(w * 0.76), height = Math.round(h * 0.75);
+  
+  // 1. 机舱高精金属防滑地面与发光引导地毯
+  AssetManager.drawTiled("airplaneFloor", ctx, left + 12, top + 14, width - 24, height - 28, 64);
+  // 机体边框与圆角轮廓
+  ctx.strokeStyle = "#404c46"; ctx.lineWidth = 4; ctx.strokeRect(left + 12, top + 14, width - 24, height - 28);
+  // 2. 机身上部舱壁与舷窗外景
+  AssetManager.draw("airplaneWall", ctx, left + 12, top - 18, width - 24, 76);
+  
+  if (!upper) {
+    // 下层客舱：精细客机 2+2 双座排布
+    for (let r = 0; r < 4; r++) {
+      const sy = top + 80 + r * 68;
+      AssetManager.draw("airplaneSeats", ctx, left + 45, sy, 72, 72);
+      AssetManager.draw("airplaneSeats", ctx, left + width - 117, sy, 72, 72);
     }
-    // 货舱隔板、绑带和散落行李
-    ctx.fillStyle="#6c756b";ctx.fillRect(w*.19,h*.69,w*.62,5);ctx.fillStyle="#c3ad7e";ctx.fillRect(w*.19,h*.70,w*.62,2);
-    for(let i=0;i<4;i++){const x=w*(.20+i*.105),y=h*(.72+(i%2)*.035);ctx.fillStyle="#282e29";ctx.fillRect(x+3,y+4,w*.075,h*.05);ctx.fillStyle=i%2?"#806344":"#9b8057";ctx.fillRect(x,y,w*.075,h*.05);ctx.strokeStyle="#c5a974";ctx.strokeRect(x,y,w*.075,h*.05);ctx.fillStyle="#44382b";ctx.fillRect(x+w*.035,y,4,h*.05);}
-    ctx.fillStyle="#d7c8a5";ctx.font="bold 14px sans-serif";ctx.textAlign="center";ctx.fillText("下层 · 客舱与货舱",w*.5,top-8);
-  }else{
-    // 上层驾驶舱：仪表台、断裂机翼梁和破碎风挡。
-    ctx.fillStyle="#172b2b";ctx.fillRect(w*.36,h*.19,w*.28,h*.13);ctx.fillStyle="#83aeb0";ctx.fillRect(w*.375,h*.205,w*.25,h*.095);
-    ctx.strokeStyle="#d0d0b8";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(w*.36,h*.33);ctx.lineTo(w*.64,h*.33);ctx.stroke();
-    ctx.fillStyle="#252e2b";ctx.fillRect(w*.30,h*.38,w*.40,h*.14);ctx.fillStyle="#66766b";ctx.fillRect(w*.32,h*.40,w*.36,h*.085);
-    for(let i=0;i<8;i++){const x=w*(.345+i*.044);ctx.fillStyle=["#c47d50","#a9c2a0","#c7b86c"][i%3];ctx.beginPath();ctx.arc(x,h*.44,4,0,Math.PI*2);ctx.fill();ctx.fillStyle="#1d2926";ctx.fillRect(x-3,h*.455,6,5);}
-    ctx.fillStyle="#717e75";ctx.beginPath();ctx.moveTo(w*.17,h*.57);ctx.lineTo(w*.43,h*.50);ctx.lineTo(w*.40,h*.63);ctx.lineTo(w*.20,h*.68);ctx.closePath();ctx.fill();
-    ctx.strokeStyle="#c1c8b7";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w*.19,h*.59);ctx.lineTo(w*.39,h*.55);ctx.moveTo(w*.25,h*.57);ctx.lineTo(w*.29,h*.65);ctx.moveTo(w*.34,h*.54);ctx.lineTo(w*.36,h*.62);ctx.stroke();
-    ctx.fillStyle="#d7c8a5";ctx.font="bold 14px sans-serif";ctx.textAlign="center";ctx.fillText("上层 · 驾驶舱与断裂机翼",w*.5,top-8);
+    // 货舱区域：散落行李与航空储运箱
+    AssetManager.draw("airplaneCargo", ctx, left + 40, top + height - 115, 82, 82);
+    AssetManager.draw("airplaneCargo", ctx, left + width - 122, top + height - 115, 82, 82);
+    ctx.fillStyle = "#d7c8a5"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("下层 · 客舱与行李货舱", w * 0.5, top - 8);
+  } else {
+    // 上层驾驶舱：全宽玻璃化航电仪表控制台、操纵杆与破损风挡
+    AssetManager.draw("airplaneCockpit", ctx, left + width * 0.14, top + 12, width * 0.72, height * 0.38);
+    // 飞行员座椅
+    AssetManager.draw("airplaneSeats", ctx, left + width * 0.22, top + height * 0.42, 78, 78);
+    AssetManager.draw("airplaneSeats", ctx, left + width * 0.62, top + height * 0.42, 78, 78);
+    ctx.fillStyle = "#d7c8a5"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText("上层 · 驾驶舱与机翼梁", w * 0.5, top - 8);
   }
-  // 结构性舱梯与入口：地面标识、金属梯级，和场景边界统一。
-  ctx.fillStyle="#1d2824";ctx.fillRect(w*.455,h*.785,w*.09,h*.07);ctx.fillStyle="#b2b4a1";ctx.fillRect(w*.46,h*.79,w*.08,4);
-  for(let i=0;i<4;i++){ctx.fillStyle=i%2?"#7e887e":"#aab1a2";ctx.fillRect(w*.465,h*(.802+i*.012),w*.07,3);}
-  for(const container of AIRCRAFT_CONTAINERS){if(container.floor===gameState.aircraftFloor)drawAircraftContainer(container);}
-  // 搜索时显示明确进度和当前容器，不会瞬间把整箱物资塞进背包。
-  if(gameState.aircraftSearch){const c=AIRCRAFT_CONTAINERS.find(item=>item.id===gameState.aircraftSearch.id);if(c){ctx.fillStyle="rgba(9,14,12,.78)";ctx.fillRect(w*.30,h*.91,w*.40,28);ctx.fillStyle="#ead8a9";ctx.font="12px sans-serif";ctx.textAlign="center";ctx.fillText(`正在搜索：${c.name} · 翻找物资中…`,w*.5,h*.93+6);}}
-  ctx.fillStyle="rgba(0,0,0,.72)";ctx.fillRect(16,16,245,38);ctx.fillStyle="#f2e6c8";ctx.font="bold 14px sans-serif";ctx.textAlign="left";ctx.fillText(upper?"飞机残骸 / 上层驾驶舱":"飞机残骸 / 下层客舱",28,40);
-  ctx.fillStyle="rgba(0,0,0,.58)";ctx.fillRect(w-258,16,242,50);ctx.fillStyle="#f0d17a";ctx.font="12px sans-serif";ctx.fillText("WASD / 方向键：移动",w-244,37);ctx.fillText("E：搜刮 / 切换楼层　Q：离开",w-244,55);
-  drawCharacterSprite(ctx,gameState.player.x,gameState.player.y,gameState.selectedCharacter?.id||"scout",gameState.player.facing||"down",gameState.player.moving,gameState.player.walkTime||0,gameState.player.actionUntil>performance.now()?gameState.player.actionType:"");
+  // 结构性舱梯
+  ctx.fillStyle = "#1d2824"; ctx.fillRect(w * 0.455, h * 0.785, w * 0.09, h * 0.07);
+  ctx.fillStyle = "#b2b4a1"; ctx.fillRect(w * 0.46, h * 0.79, w * 0.08, 4);
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#7e887e" : "#aab1a2"; ctx.fillRect(w * 0.465, h * (0.802 + i * 0.012), w * 0.07, 3); }
+  
+  for (const container of AIRCRAFT_CONTAINERS) { if (container.floor === gameState.aircraftFloor) drawAircraftContainer(container); }
+  if (gameState.aircraftSearch) {
+    const c = AIRCRAFT_CONTAINERS.find(item => item.id === gameState.aircraftSearch.id);
+    if (c) {
+      ctx.fillStyle = "rgba(9,14,12,.78)"; ctx.fillRect(w * 0.30, h * 0.91, w * 0.40, 28);
+      ctx.fillStyle = "#ead8a9"; ctx.font = "12px sans-serif"; ctx.textAlign = "center"; ctx.fillText(`正在搜索：${c.name} · 翻找物资中…`, w * 0.5, h * 0.93 + 6);
+    }
+  }
+  ctx.fillStyle = "rgba(0,0,0,.72)"; ctx.fillRect(16, 16, 245, 38);
+  ctx.fillStyle = "#f2e6c8"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left"; ctx.fillText(upper ? "飞机残骸 / 上层驾驶舱" : "飞机残骸 / 下层客舱", 28, 40);
+  ctx.fillStyle = "rgba(0,0,0,.58)"; ctx.fillRect(w - 258, 16, 242, 50);
+  ctx.fillStyle = "#f0d17a"; ctx.font = "12px sans-serif"; ctx.fillText("WASD / 方向键：移动", w - 244, 37); ctx.fillText("E：搜刮 / 切换楼层　Q：离开", w - 244, 55);
+  drawCharacterSprite(ctx, gameState.player.x, gameState.player.y, gameState.selectedCharacter?.id || "scout", gameState.player.facing || "down", gameState.player.moving, gameState.player.walkTime || 0, gameState.player.actionUntil > performance.now() ? gameState.player.actionType : "");
 }
 function showToast(message) {
   let toast = document.querySelector("#game-toast");
@@ -1326,7 +1643,7 @@ function getLootForObject(obj) {
     bush: ["berries", 2, "从灌木上采到野果 ×2"], berries: ["berries", 2, "采到野果 ×2"],
     flower: ["flower", 1, "采下野花 ×1"], highGrass: ["fiber", 2, "从高草丛收集植物纤维 ×2"],
     medicinalHerb: ["herb", 1, "采到止血草 ×1"], waterSource: ["dirtyWater", 1, "装取生水 ×1"],
-    ore: ["ironOre", 2, "采到铁矿石 ×2"], copperOre: ["copperOre", 2, "采到铜矿石 ×2"], silverOre: ["silverOre", 2, "采到银矿石 ×2"], goldOre: ["goldOre", 2, "采到金矿石 ×2"], pebbleNode: ["pebble", 2, "捡到河谷鹅卵石 ×2"]
+    ore: ["ironOre", 2, "采到铁矿石 ×2"], copperOre: ["copperOre", 2, "采到铜矿石 ×2"], silverOre: ["silverOre", 2, "采到银矿石 ×2"], goldOre: ["goldOre", 2, "采到金矿石 ×2"], richOre: [obj?.oreType || "ironOre", 4, `开采高纯矿脉，获得${itemCatalog[obj?.oreType||"ironOre"]?.name||"矿石"} ×4`], pebbleNode: ["pebble", 2, "捡到河谷鹅卵石 ×2"]
   })[obj.type] || null;
 }
 function activeObjectList() { return gameState.location === "region" ? regionObjects : worldObjects; }
@@ -1345,7 +1662,7 @@ function nearestWorldObject(maxDistance = 108) {
   let nearest = null;
   let nearestDistance = maxDistance;
   for (const obj of activeObjectList()) {
-    if (obj.hidden || harvestedObjects.has(obj.id) || (obj.type === "regionCrate" && gameState.location === "region" && gameState.searchedContainers.includes(`${gameState.regionId}:main-crate`)) || (!getLootForObject(obj) && !["campEntrance","cabinEntrance","riverGate","ridgeGate","regionExit","regionCrate","waterSource","storyPoint","aircraftWreck","companionNpc"].includes(obj.type))) continue;
+    if (obj.hidden || harvestedObjects.has(obj.id) || (obj.type === "regionCrate" && gameState.location === "region" && gameState.searchedContainers.includes(`${gameState.regionId}:main-crate`)) || (!getLootForObject(obj) && !["campEntrance","cabinEntrance","riverGate","ridgeGate","regionExit","regionCrate","waterSource","storyPoint","aircraftWreck","companionNpc","ancientRuins","mysticAltar","abandonedCamp","pirateWreck","supplyCrate","fishingPier","richOre"].includes(obj.type))) continue;
     const { x: ox, y: oy } = getObjectWorldPosition(obj);
     const distance = Math.hypot(gameState.player.x - ox, gameState.player.y - oy);
     if (distance < nearestDistance) { nearest = obj; nearestDistance = distance; }
@@ -1477,6 +1794,14 @@ function updateInteractionPrompt(deltaTime = 0) {
   if (obj.type === "highGrass") action = "采集植物纤维 ×2 · 可制作绳索";
   if (obj.type === "branch") action = "捡取树枝 · 工具材料";
   if (obj.type === "stonePile") action = "捡取小石块 · 初期优先收集";
+  if (obj.type === "stonePile") action = "拾取碎石块";
+  if (obj.type === "ancientRuins") action = "进入失落神殿内部圣所 (探秘圣坛核心)";
+  if (obj.type === "mysticAltar") action = "奉献供品 (野果×3/止血草×2) 获得状态完全回满净化";
+  if (obj.type === "abandonedCamp") action = "搜寻探险营地物资与生存指南";
+  if (obj.type === "pirateWreck") action = "进入海盗沉船底舱 (搜刮船长宝藏与海盗钢剑)";
+  if (obj.type === "supplyCrate") action = (obj.searched || gameState.searchedContainers.includes(obj.id)) ? "补给箱已清空" : "开启空投物资箱";
+  if (obj.type === "fishingPier") action = hasItem("fishingRod") ? "抛竿垂钓 (收获鲜鱼与稀有打捞物)" : "需要装备钓鱼竿 (可在工作台制作)";
+  if (obj.type === "richOre") action = hasAnyWorkingTool(PICKAXE_TOOL_IDS) ? "开采富集矿脉 (高产矿石×4)" : "需要携带矿镐开采";
   interactionPrompt.innerHTML = `<kbd>E</kbd><span>${name} · ${action}</span>`;
   interactionPrompt.classList.remove("hidden");
 }
@@ -1513,14 +1838,77 @@ function interactWithWorld() {
   if (gameState.location === "cabin") {
     const exitNear = Math.abs(gameState.player.x-canvas.width/2)<90 && gameState.player.y>canvas.height-115;
     if(exitNear){leaveAbandonedCabin();return;}
-    const deskX=canvas.width*.34, deskY=canvas.height*.39;
-    if(Math.hypot(gameState.player.x-deskX,gameState.player.y-deskY)<105){
+    const deskCenterX = canvas.width * 0.24 + 57.5;
+    const deskCenterY = canvas.height * 0.32 + 42.5;
+    if (Math.hypot(gameState.player.x - deskCenterX, gameState.player.y - deskCenterY) < 110) {
       if(mainQuestState.chapter>=4 && !mainQuestState.flags.anomaly_cabin){mainQuestState.flags.anomaly_cabin=true;openStoryDialog("废弃木屋 · 异常记录","桌板下压着一页被菌丝侵蚀的巡护记录：最早的兽类异变发生在飞机坠毁后的第二天。木墙深处有黑色结晶，正沿着地基向森林扩散。","记录线索",()=>{checkMainQuestProgress();saveGame(false);});}
       else if(!mainQuestState.flags.cabinSearched){mainQuestState.flags.cabinSearched=true;addItemToInventory("wire",2);addItemToInventory("basicParts",1);addItemToInventory("bandage",1);renderInventory();renderHotbar();openStoryDialog("废弃木屋","抽屉里找到一些电线、零件和一卷干净绷带。桌上的巡护记录提到森林里的异常，但需要等伙伴一起判断。","收好物资",()=>saveGame(false));}
       else showToast("桌上的巡护记录已经收好。黑色菌丝仍在墙缝中缓慢生长。");
       return;
     }
-    showToast("破损床铺和倒塌的柜子堵住了两侧；靠近桌子按 E 调查，走到南侧出口按 E 离开。");return;
+    showToast("靠近桌子按 E 调查，走到南侧出口按 E 或按 Q 离开。");return;
+  }
+  if (gameState.location === "ancientRuins") {
+    const exitNear = Math.abs(gameState.player.x - canvas.width / 2) < 95 && gameState.player.y > canvas.height - 110;
+    if (exitNear) { leaveAncientRuins(); return; }
+    const altarNear = Math.hypot(gameState.player.x - canvas.width / 2, gameState.player.y - (52 + (canvas.height - 105) * 0.35)) < 110;
+    if (altarNear) {
+      if (!gameState.searchedContainers.includes("poi:ancientRuins")) {
+        gameState.searchedContainers.push("poi:ancientRuins");
+        addItemToInventory("orbCore", 1);
+        addItemToInventory("silverIngot", 2);
+        addItemToInventory("goldOre", 3);
+        renderInventory(); renderHotbar(); playSoundEffect("upgrade");
+        openStoryDialog("失落神殿内部 · 圣坛核心", "在古老神殿的中央圣坛上，一枚散发着纯净脉冲的失落核心正在静静悬浮。你将其取下，四周泛起璀璨的青蓝光芒。\n\n【获得：营地魔法球(orbCore) ×1、精炼银锭 ×2、纯金矿石 ×3】", "收取遗物", () => saveGame(false));
+      } else {
+        showToast("圣坛符文光华流转，四周空气中弥漫着古老文明的气息。");
+      }
+      return;
+    }
+    const pad = Math.min(60, canvas.width * 0.08), top = 52, h = canvas.height - 105;
+    const chestLeft = Math.hypot(gameState.player.x - (pad + 45), gameState.player.y - (top + h * 0.62)) < 85;
+    const chestRight = Math.hypot(gameState.player.x - (canvas.width - pad - 72), gameState.player.y - (top + h * 0.62)) < 85;
+    if (chestLeft || chestRight) {
+      const chestKey = chestLeft ? "poi:ruinsChestL" : "poi:ruinsChestR";
+      if (!gameState.searchedContainers.includes(chestKey)) {
+        gameState.searchedContainers.push(chestKey);
+        addItemToInventory("silverIngot", 1);
+        addItemToInventory("copperIngot", 2);
+        renderInventory(); renderHotbar(); playSoundEffect("pickup");
+        showToast("开启远古遗迹石匣：获得精炼银锭 ×1、铜锭 ×2！");
+      } else {
+        showToast("远古石匣已搜空。");
+      }
+      return;
+    }
+    showToast("靠近中央圣坛按 E 调查核心；走到南侧传送门按 E 或按 Q 离开。");
+    return;
+  }
+  if (gameState.location === "pirateShip") {
+    const exitNear = Math.abs(gameState.player.x - canvas.width / 2) < 95 && gameState.player.y > canvas.height - 110;
+    if (exitNear) { leavePirateShip(); return; }
+    const treasureNear = Math.hypot(gameState.player.x - canvas.width * 0.68, gameState.player.y - canvas.height * 0.44) < 110;
+    if (treasureNear) {
+      if (!gameState.searchedContainers.includes("poi:pirateTreasure")) {
+        gameState.searchedContainers.push("poi:pirateTreasure");
+        addItemToInventory("sword", 1);
+        addItemToInventory("goldIngot", 2);
+        addItemToInventory("silverOre", 3);
+        addItemToInventory("cloth", 3);
+        renderInventory(); renderHotbar(); playSoundEffect("pickup");
+        openStoryDialog("海盗沉船底舱 · 船长宝藏", "在沉船底舱的货箱堆里，你撬开了一口雕花黄铜宝箱！金币与银矿闪闪发光，里面还躺着一柄保存完好的精钢海盗弯刀！\n\n【获得：海盗钢剑 ×1、金锭 ×2、银矿石 ×3、坚韧布料 ×3】", "收好宝藏", () => saveGame(false));
+      } else {
+        showToast("海盗宝箱已搜刮完毕，余下散落的金币已失去光泽。");
+      }
+      return;
+    }
+    const deskNear = Math.hypot(gameState.player.x - canvas.width * 0.25, gameState.player.y - canvas.height * 0.35) < 90;
+    if (deskNear) {
+      openStoryDialog("船长航海桌", "桌上摊着一张受潮泛黄的群岛航海图，标注着暗礁与暴风雨海域。边上的航海日记写着：『暴风雨将我们推向了未知群岛的禁忌森林…这里的植物会发光，夜里有不可思议的生物在游荡…』", "合上日记", null);
+      return;
+    }
+    showToast("靠近右侧宝藏按 E 搜刮；靠近左侧海图按 E 查看；走到南侧舱梯按 E 或按 Q 离开。");
+    return;
   }
   if (gameState.location === "aircraft") {
     const container = getNearestAircraftContainer(82);
@@ -1552,6 +1940,118 @@ function interactWithWorld() {
     showToast("附近没有可交互目标。靠近资源、营地入口或篝火后按 E。");
     return;
   }
+  
+  // 探索交互：失落神殿遗迹（进入内部圣殿空间）
+  if (obj.type === "ancientRuins") {
+    enterAncientRuins();
+    return;
+  }
+  // 探索交互：浅滩海盗沉船（进入底舱货舱与宝藏室）
+  if (obj.type === "pirateWreck") {
+    enterPirateShip();
+    return;
+  }
+  // 探索交互：荒野古代神龛
+  if (obj.type === "mysticAltar") {
+    if (hasItem("berries", 3) || hasItem("herb", 2)) {
+      if (hasItem("berries", 3)) removeItems("berries", 3);
+      else removeItems("herb", 2);
+      survivalState.health = 100;
+      survivalState.hunger = 100;
+      survivalState.thirst = 100;
+      addItemToInventory("safeWater", 2);
+      renderHUD(); renderInventory(); renderHotbar(); playSoundEffect("upgrade");
+      showToast("神龛泛起温暖纯净的翠绿光晕！生命、饱食与水分已完全回满！获得煮沸净水 ×2。");
+    } else {
+      openStoryDialog("荒野古代神龛", "这是一座守护荒野生灵的远古神龛，石盆中似乎需要奉献新鲜的采摘果实（背包拥有：野果×3 或 止血草×2）即可唤醒神明净化庇佑，使全身状态完全回满。", "了解", null);
+    }
+    return;
+  }
+  // 探索交互：废弃探险家营地
+  if (obj.type === "abandonedCamp") {
+    if (!gameState.searchedContainers.includes("poi:abandonedCamp")) {
+      gameState.searchedContainers.push("poi:abandonedCamp");
+      addItemToInventory("bread", 3);
+      addItemToInventory("wire", 3);
+      addItemToInventory("battery", 2);
+      addItemToInventory("radioRepairKit", 1);
+      renderInventory(); renderHotbar(); playSoundEffect("pickup");
+      openStoryDialog("废弃探险家营地", "帆布帐篷下散落着前人留下的补给箱，翻找出一本探险日记：\n『第14天：向东的断崖有极丰富的金银铜矿，如果想渡过湍急河流，先在营地制作木筏与长绳……』\n\n【获得：干粮面包 ×3、电线 ×3、废旧电池 ×2、无线电修理包 ×1】", "收起物资", () => saveGame(false));
+    } else {
+      showToast("废弃营地的物资已被搜刮完毕，余烬旁静静留着探险者的遗迹。");
+    }
+    return;
+  }
+  // 探索交互：浅滩海盗沉船
+  if (obj.type === "pirateWreck") {
+    if (!gameState.searchedContainers.includes("poi:pirateWreck")) {
+      gameState.searchedContainers.push("poi:pirateWreck");
+      addItemToInventory("goldIngot", 2);
+      addItemToInventory("silverOre", 3);
+      addItemToInventory("sword", 1);
+      addItemToInventory("cloth", 3);
+      renderInventory(); renderHotbar(); playSoundEffect("pickup");
+      openStoryDialog("浅滩海盗沉船", "在沙滩沉船的肋木缝隙中，你挖出了一个被海藻与藤壶包裹的黄铜铁皮藏宝箱！\n\n【获得：锋利短剑 ×1、金锭 ×2、银矿石 ×3、粗布 ×3】", "收取珍宝", () => saveGame(false));
+    } else {
+      showToast("海盗沉船龙骨在海浪与海风中静静倾斜，藏宝箱已空。");
+    }
+    return;
+  }
+  // 探索交互：空投物资箱
+  if (obj.type === "supplyCrate") {
+    if (!obj.searched && !gameState.searchedContainers.includes(obj.id)) {
+      obj.searched = true;
+      gameState.searchedContainers.push(obj.id);
+      const crateLoots = {
+        medical: [["medkit", 2], ["bandage", 4], ["safeWater", 2]],
+        tools: [["copperPickaxe", 1], ["torch", 3], ["rope", 2]],
+        hunt: [["crossbow", 1], ["arrow", 16], ["leather", 3]],
+        building: [["plank", 8], ["basicParts", 4], ["tape", 2]],
+        survival: [["waterFilter", 1], ["safeWater", 4], ["roastedBerries", 4]],
+        industrial: [["industrialFuel", 1], ["battery", 2], ["electronics", 2]]
+      };
+      const drops = crateLoots[obj.crateType] || crateLoots.medical;
+      for (const [id, count] of drops) addItemToInventory(id, count);
+      renderInventory(); renderHotbar(); playSoundEffect("pickup");
+      showToast(`开启【${obj.label || "空投箱"}】，获得丰厚补给！`);
+      saveGame(false);
+    } else {
+      showToast("该空投箱已被搜刮完毕。");
+    }
+    return;
+  }
+  // 探索交互：河畔垂钓码头
+  if (obj.type === "fishingPier") {
+    if (hasItem("fishingRod")) {
+      gameState.player.actionType = "interact";
+      gameState.player.actionUntil = performance.now() + 800;
+      const catches = ["rawMeat", "boneHook", "scrapMetal", "safeWater"];
+      const caughtId = catches[Math.floor(Math.random() * catches.length)];
+      addItemToInventory(caughtId, 1);
+      renderInventory(); renderHotbar(); playSoundEffect("pickup");
+      showToast(`水花翻腾！钓到了【${itemCatalog[caughtId]?.name || "水产收获"}】×1！`);
+      saveGame(false);
+    } else {
+      showToast("水波荡漾的丰饶垂钓点，需要在工作台制作并携带【钓鱼竿】才可下竿垂钓。");
+    }
+    return;
+  }
+  // 探索交互：富集高纯矿脉
+  if (obj.type === "richOre") {
+    if (!hasAnyWorkingTool(PICKAXE_TOOL_IDS)) {
+      showToast("岩壁极其坚硬，需要携带【石镐或更高阶矿镐】才可开采富矿。");
+      return;
+    }
+    const oreId = obj.oreType || "ironOre";
+    addItemToInventory(oreId, 4);
+    harvestedObjects.add(obj.id);
+    harvestedAtMinutes.set(obj.id, worldTimeMinutes);
+    renderInventory(); renderHotbar(); playSoundEffect("chop");
+    showToast(`成功开采高纯矿脉，获得【${itemCatalog[oreId]?.name || "高纯矿石"}】×4！`);
+    saveGame(false);
+    return;
+  }
+
   if (obj.type === "aircraftWreck") { enterAircraft(); return; }
   if (obj.type === "cabinEntrance") { enterAbandonedCabin(); return; }
   if (obj.type === "playerCamp") { const camp=gameState.camps.find(c=>c.id===obj.campId); enterCamp(camp); return; }
@@ -2633,24 +3133,47 @@ function drawCharacterSprite(targetCtx, x, y, characterId, facing="down", moving
   characterId = characterId || "scout";
   const spriteAsset = AssetManager.get(characterId);
   const walkSheet = CharacterAnimationAssets.get(characterId, "walk");
-  const bobAsset = moving && !walkSheet ? Math.sin((walkTime || performance.now()/130) * 2) * 1.5 : 0;
+  // 真实行走动态起伏节奏（落地沉、提腿起，不再像漂浮平移）
+  const walkBob = moving ? Math.sin((walkTime || performance.now() / 115) * 1.6) * 2.2 : 0;
   if (spriteAsset || walkSheet) {
-    targetCtx.save(); targetCtx.imageSmoothingEnabled = false;
-    targetCtx.fillStyle = "rgba(15,22,15,.34)"; targetCtx.beginPath(); targetCtx.ellipse(x+1,y+2,17*sizeScale,5*sizeScale,0,0,Math.PI*2); targetCtx.fill();
-    const dirRow = ({down:0,left:1,right:2,up:3})[facing] ?? 0;
+    targetCtx.save();
+    // 开启高精度平滑抗锯齿插值，消除最近邻采样造成的网格锯齿与模糊失真
+    targetCtx.imageSmoothingEnabled = true;
+    targetCtx.imageSmoothingQuality = "high";
+    targetCtx.fillStyle = "rgba(15,22,15,.34)";
+    targetCtx.beginPath();
+    targetCtx.ellipse(x+1, y+2, 17*sizeScale, 5*sizeScale, 0, 0, Math.PI*2);
+    targetCtx.fill();
+    const dirRowMap = {
+      down: 0,
+      downLeft: 1,
+      downRight: 2,
+      left: 1,
+      right: 2,
+      up: 3,
+      upLeft: 1,
+      upRight: 2
+    };
+    const dirRow = dirRowMap[facing] ?? 0;
     if (walkSheet) {
       const cols = 4, rows = 4, sw = walkSheet.naturalWidth / cols, sh = walkSheet.naturalHeight / rows;
-      const frame = moving ? (Math.floor((walkTime || performance.now()/100) * 0.45) % 4) : 0;
-      targetCtx.drawImage(walkSheet, frame*sw, dirRow*sh, sw, sh, Math.round(x-23*sizeScale), Math.round(y-58*sizeScale+bobAsset*sizeScale), 46*sizeScale, 58*sizeScale);
+      // 真实4帧步态推进循环
+      const frame = moving ? (Math.floor((walkTime || performance.now() / 110) * 0.45) % 4) : 0;
+      targetCtx.drawImage(walkSheet, frame*sw, dirRow*sh, sw, sh, Math.round(x - 23*sizeScale), Math.round(y - 58*sizeScale + walkBob*sizeScale), 46*sizeScale, 58*sizeScale);
     } else {
-      if (facing === "left") { targetCtx.translate(x*2,0); targetCtx.scale(-1,1); }
-      targetCtx.drawImage(spriteAsset, Math.round(x-23*sizeScale), Math.round(y-58*sizeScale+bobAsset*sizeScale), 46*sizeScale, 58*sizeScale);
+      if (facing === "left") { targetCtx.translate(x*2, 0); targetCtx.scale(-1, 1); }
+      targetCtx.drawImage(spriteAsset, Math.round(x - 23*sizeScale), Math.round(y - 58*sizeScale + walkBob*sizeScale), 46*sizeScale, 58*sizeScale);
     }
     targetCtx.restore();
     const heldAsset = getHeldItem();
     if (heldAsset && facing !== "up") {
       const assetKey = /axe/i.test(heldAsset.id || "") ? "stoneAxe" : /sword/i.test(heldAsset.id || "") ? "sword" : null;
-      if (assetKey) AssetManager.draw(assetKey, targetCtx, x+6, y-32+bobAsset, 20, 24);
+      if (assetKey) {
+        const isFacingLeft = facing === "left" || facing === "downLeft" || facing === "upLeft";
+        const wx = isFacingLeft ? (x - 24) : (x + 5);
+        const wy = (facing === "down" || facing === "downLeft" || facing === "downRight") ? (y - 28 + walkBob) : (y - 32 + walkBob);
+        AssetManager.draw(assetKey, targetCtx, wx, wy, 20, 24);
+      }
     }
     return;
   }
@@ -2900,7 +3423,7 @@ function drawPlayerCamp(x,y,level=1){
   ctx.fillStyle="#f5e7bd";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(`营地 ${["","I","II","III"][level]}`,x,y+43);
 }
 function drawCampEntrance(x,y,col,row) {
-  // 破旧住宅入口：石基、木框、斜屋顶、破损木板、门槛与门边灯，脚点作为排序锚点。
+  if (AssetManager.draw("campEntrance", ctx, x - 44, y - 80, 120, 110)) return;
   ctx.save();
   ctx.fillStyle="rgba(8,13,9,.34)";ctx.beginPath();ctx.ellipse(x+17,y+27,24,7,0,0,Math.PI*2);ctx.fill();
   // 屋顶投影和两侧檐口
@@ -2947,7 +3470,7 @@ function drawCampfire(x,y,lit=true) {
   ctx.fillStyle="#ffd66d";ctx.beginPath();ctx.moveTo(x,y+2);ctx.lineTo(x-3,y-5);ctx.lineTo(x+1,y-10);ctx.lineTo(x+4,y-2);ctx.closePath();ctx.fill();
 }
 function drawAbandonedCabin(x,y,col,row){
-  // 木屋外观以破损木墙、塌陷屋顶、青苔和一扇半开的门构成，而非卷轴标记。
+  if (AssetManager.draw("abandonedCabin", ctx, x - 64, y - 96, 160, 137)) return;
   const bx=x-64,by=y-108;ctx.save();ctx.fillStyle="rgba(8,13,10,.32)";ctx.beginPath();ctx.ellipse(x+4,y+8,76,20,0,0,Math.PI*2);ctx.fill();
   ctx.fillStyle="#3a3028";ctx.fillRect(bx+8,by+35,112,72);ctx.fillStyle="#6b543b";ctx.fillRect(bx+13,by+39,102,64);
   for(let i=0;i<6;i++){ctx.fillStyle=i%2?"#896b48":"#795c3e";ctx.fillRect(bx+13,by+42+i*10,102,7);ctx.strokeStyle="#3f3529";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(bx+15,by+49+i*10);ctx.lineTo(bx+112,by+49+i*10);ctx.stroke();}
@@ -2959,37 +3482,41 @@ function drawAbandonedCabin(x,y,col,row){
 function enterAbandonedCabin(){gameState.cabinReturnPosition={x:gameState.player.x,y:gameState.player.y};gameState.location="cabin";gameState.player.x=canvas.width/2;gameState.player.y=canvas.height-92;gameState.player.moving=false;gameState.keys.clear();showToast("进入废弃木屋：桌边有巡护记录，南侧门口可以离开。");drawWorld();saveGame(false);}
 function leaveAbandonedCabin(){const p=gameState.cabinReturnPosition;gameState.location="world";gameState.player.x=p?.x??(58.5*TILE_SIZE);gameState.player.y=p?.y??(47*TILE_SIZE);gameState.cabinReturnPosition=null;gameState.keys.clear();drawWorld();saveGame(false);}
 function drawAbandonedCabinInterior(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle="#202a22";ctx.fillRect(0,0,canvas.width,canvas.height);
-  const pad=56,top=48,w=canvas.width-pad*2,h=canvas.height-96;ctx.fillStyle="#49382b";ctx.fillRect(pad,top,w,h);ctx.fillStyle="#90714b";ctx.fillRect(pad+12,top+14,w-24,h-26);
-  for(let y=top+22;y<top+h-8;y+=19){ctx.strokeStyle="#6f5135";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pad+12,y);ctx.lineTo(pad+w-12,y);ctx.stroke();}
-  // 墙体和破损天花板
-  ctx.fillStyle="#30271f";ctx.fillRect(pad,top,w,18);ctx.fillRect(pad,top,18,h);ctx.fillRect(pad+w-18,top,18,h);
-  ctx.fillStyle="#4d3d2d";ctx.beginPath();ctx.moveTo(pad+10,top+4);ctx.lineTo(pad+170,top+1);ctx.lineTo(pad+220,top+12);ctx.lineTo(pad+360,top+5);ctx.lineTo(pad+380,top+19);ctx.lineTo(pad+10,top+19);ctx.closePath();ctx.fill();
-  // 旧桌、巡护记录、倒塌书架和床铺形成明确的室内动线
-  ctx.fillStyle="#4d3422";ctx.fillRect(canvas.width*.24,canvas.height*.32,112,42);ctx.fillStyle="#8b6540";ctx.fillRect(canvas.width*.24+5,canvas.height*.32+5,102,8);ctx.fillStyle="#c9bea0";ctx.fillRect(canvas.width*.24+30,canvas.height*.32+14,32,18);ctx.strokeStyle="#504a3c";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(canvas.width*.24+34,canvas.height*.32+19);ctx.lineTo(canvas.width*.24+56,canvas.height*.32+19);ctx.moveTo(canvas.width*.24+34,canvas.height*.32+24);ctx.lineTo(canvas.width*.24+53,canvas.height*.32+24);ctx.stroke();
-  ctx.fillStyle="#3c3025";ctx.fillRect(canvas.width*.65,canvas.height*.43,58,92);ctx.fillStyle="#705339";ctx.fillRect(canvas.width*.65+4,canvas.height*.43+8,50,12);ctx.fillRect(canvas.width*.65+4,canvas.height*.43+34,50,12);ctx.fillStyle="#9a7952";ctx.fillRect(canvas.width*.65+8,canvas.height*.43+10,42,5);ctx.fillRect(canvas.width*.65+8,canvas.height*.43+36,42,5);
-  ctx.fillStyle="#4a3326";ctx.fillRect(canvas.width*.16,canvas.height*.62,92,38);ctx.fillStyle="#b8b09a";ctx.fillRect(canvas.width*.16+6,canvas.height*.62+5,80,28);ctx.fillStyle="#65745a";ctx.fillRect(canvas.width*.16+6,canvas.height*.62+5,80,9);
-  ctx.fillStyle="#f0ddb0";ctx.font="bold 15px sans-serif";ctx.textAlign="center";ctx.fillText("废弃木屋 · 室内",canvas.width/2,28);ctx.font="12px sans-serif";ctx.fillText("靠近桌边按 E 调查 · 南侧出口按 E 离开",canvas.width/2,canvas.height-18);
+  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle="#191f1a";ctx.fillRect(0,0,canvas.width,canvas.height);
+  const pad=56,top=48,w=canvas.width-pad*2,h=canvas.height-96;
+  // 1. 实木木板地面
+  AssetManager.drawTiled("cabinFloor", ctx, pad + 12, top + 14, w - 24, h - 26, 64);
+  // 2. 原木墙面
+  AssetManager.draw("cabinWall", ctx, pad + 12, top - 18, w - 24, 76);
+  // 3. 室内壁炉
+  AssetManager.draw("fireplace", ctx, pad + 20, top + h * 0.20, 85, 85);
+  // 4. 巡护员工作台与巡护记录
+  AssetManager.draw("rangerDesk", ctx, canvas.width * 0.24, canvas.height * 0.32, 115, 85);
+  // 5. 双层木床
+  AssetManager.draw("survivorBed", ctx, canvas.width * 0.65, canvas.height * 0.38, 85, 95);
+  // 出口通道
+  ctx.fillStyle="#34251c";ctx.fillRect(canvas.width/2-38,top+h-14,76,28);
+  ctx.fillStyle="#c8a16b";ctx.fillRect(canvas.width/2-30,top+h-10,60,16);
+  ctx.fillStyle="#f0ddb0";ctx.font="bold 15px sans-serif";ctx.textAlign="center";ctx.fillText("废弃木屋 · 室内",canvas.width/2,28);
+  ctx.font="12px sans-serif";ctx.fillText("靠近桌边按 E 调查 · 南侧出口按 E 或 Q 离开",canvas.width/2,canvas.height-18);
   drawCharacterSprite(ctx,gameState.player.x,gameState.player.y,gameState.selectedCharacter?.id||"scout",gameState.player.facing||"down",gameState.player.moving,gameState.player.walkTime||0,gameState.player.actionUntil>performance.now()?gameState.player.actionType:"");
 }
 
 function drawCampInterior() {
   const camp=selectedCamp(); if(!camp){gameState.location="world";drawWorld();return;}
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle="#1d2a20";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#17221a";ctx.fillRect(0,0,canvas.width,canvas.height);
   const pad=Math.min(54,canvas.width*.07), top=54, roomW=canvas.width-pad*2, roomH=canvas.height-110;
-  // 等级只改变房间面积、墙面材质和装饰，不会自动生成家具。
-  const scale=[0,.82,.92,1][camp.level]; const innerPad=(1-scale)*roomW*.5;
-  ctx.fillStyle=camp.level===1?"#493629":camp.level===2?"#5a422c":"#756044";ctx.fillRect(pad,top,roomW,roomH);
-  ctx.fillStyle=camp.level===1?"#9b7951":camp.level===2?"#ad8b5e":"#d2b77f";ctx.fillRect(pad+12+innerPad,top+16+innerPad*.4,roomW-24-innerPad*2,roomH-28-innerPad*.8);
-  ctx.strokeStyle=camp.level===1?"#6e4d32":camp.level===2?"#775638":"#8c7047";ctx.lineWidth=3;
-  for(let y=top+28;y<top+roomH-10;y+=camp.level===3?32:24){ctx.beginPath();ctx.moveTo(pad+12+innerPad,y);ctx.lineTo(pad+roomW-12-innerPad,y);ctx.stroke();}
-  ctx.fillStyle=camp.level===1?"#3d2c22":camp.level===2?"#493526":"#5a432c";ctx.fillRect(pad,top,roomW,24);ctx.fillRect(pad,top,24,roomH);ctx.fillRect(pad+roomW-24,top,24,roomH);
-  // 魔法球是每座营地自带的升级核心，不属于可拆卸家具。
-  const orbX=canvas.width/2,orbY=top+roomH*.28;
-  ctx.fillStyle="rgba(70,160,255,.18)";ctx.beginPath();ctx.arc(orbX,orbY,38,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#5f86c7";ctx.beginPath();ctx.arc(orbX,orbY,19,0,Math.PI*2);ctx.fill();ctx.fillStyle="#bfeaff";ctx.beginPath();ctx.arc(orbX-6,orbY-6,7,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#eaf1ff";ctx.font="bold 13px sans-serif";ctx.textAlign="center";ctx.fillText("魔法球 · 靠近按 E 升级",orbX,orbY+48);
+  // 1. 实木地板
+  AssetManager.drawTiled("cabinFloor", ctx, pad + 12, top + 16, roomW - 24, roomH - 28, 64);
+  // 2. 原木墙体
+  AssetManager.draw("cabinWall", ctx, pad + 12, top - 18, roomW - 24, 76);
+  // 3. 温暖壁炉
+  AssetManager.draw("fireplace", ctx, pad + 24, top + roomH * 0.22, 90, 90);
+  // 4. 魔法球核心与基座
+  const orbX=canvas.width/2,orbY=top+roomH*.26;
+  AssetManager.draw("mysticCore", ctx, orbX - 44, orbY - 48, 88, 98);
+  ctx.fillStyle="#eaf1ff";ctx.font="bold 13px sans-serif";ctx.textAlign="center";ctx.fillText("营地核心 · 靠近按 E 升级",orbX,orbY+56);
   // 家具只绘制玩家实际制作并摆放的内容。
   for(const f of camp.furniture){const x=f.x,y=f.y;ctx.fillStyle="rgba(0,0,0,.22)";ctx.fillRect(x-24,y+13,48,8);
     if(f.type==="workbench"){ctx.fillStyle=f.level===1?"#6d4528":f.level===2?"#855c34":"#9e7949";ctx.fillRect(x-26,y-10,52,24);ctx.fillStyle="#d0aa70";ctx.fillRect(x-22,y-8,44,7);ctx.fillStyle="#44301f";ctx.fillRect(x-20,y+12,5,14);ctx.fillRect(x+15,y+12,5,14);}
@@ -3008,7 +3535,7 @@ function drawCampInterior() {
     {id:"mechanic",x:pad+roomW*.32,y:top+roomH*.68,label:"陈砾 · 工匠"},
     {id:"hunter",x:pad+roomW*.68,y:top+roomH*.68,label:"叶岚 · 休息中"}
   ];
-  for(const npc of indoorNpcs){if(!mainQuestState.flags[`companion_${npc.id}`])continue;if(npc.id!=="medic"&&!mainQuestState.flags.companionsResting)continue;ctx.save();ctx.fillStyle="#e8e1d0";ctx.font="bold 10px sans-serif";ctx.textAlign="center";ctx.fillText(npc.label,npc.x,npc.y-23);drawCharacterSprite(ctx,npc.x,npc.y,npc.id,"down",false,0,"",0.78);ctx.restore();}
+  for(const npc of indoorNpcs){if(!mainQuestState.flags[`companion_${npc.id}`])continue;if(npc.id!=="medic"&&!mainQuestState.flags.companionsResting)continue;ctx.save();ctx.fillStyle="#e8e1d0";ctx.font="bold 10px sans-serif";ctx.textAlign="center";ctx.fillText(npc.label,npc.x,npc.y-23);drawCharacterSprite(ctx,npc.x,npc.y,npc.id,"down",false,0,"",1.0);ctx.restore();}
   if(mainQuestState.flags.companionsResting){ctx.save();ctx.fillStyle="#e0cda0";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText("夜间：伙伴已回屋休息",canvas.width/2,top+roomH-34);ctx.restore();}
   const px=gameState.player.x,py=gameState.player.y;
   drawCharacterSprite(ctx, px, py, gameState.selectedCharacter?.id || "scout", gameState.player.facing || "down", gameState.player.moving, gameState.player.walkTime || 0, gameState.player.actionUntil > performance.now() ? gameState.player.actionType : "");
@@ -3874,10 +4401,122 @@ function drawCachedGround(cameraX, cameraY, startCol, startRow, endCol, endRow) 
   }
 }
 // 绘制整张地图的可视区域
+
+// =========================================
+// 新增交互建筑内部空间系统（失落神殿内部 & 海盗沉船底舱）
+// =========================================
+function enterAncientRuins() {
+  gameState.ancientRuinsReturnPosition = { x: gameState.player.x, y: gameState.player.y };
+  gameState.location = "ancientRuins";
+  gameState.player.x = canvas.width / 2;
+  gameState.player.y = canvas.height - 96;
+  gameState.player.moving = false;
+  gameState.keys.clear();
+  showToast("进入失落神殿内部：中央圣坛泛着微光，南侧传送阵可返回野外。");
+  drawWorld();
+  saveGame(false);
+}
+
+function leaveAncientRuins() {
+  const p = gameState.ancientRuinsReturnPosition;
+  gameState.location = "world";
+  gameState.player.x = p?.x ?? (18.5 * TILE_SIZE);
+  gameState.player.y = p?.y ?? (18 * TILE_SIZE);
+  gameState.ancientRuinsReturnPosition = null;
+  gameState.keys.clear();
+  drawWorld();
+  saveGame(false);
+}
+
+function drawAncientRuinsInterior() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#12171a"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const pad = Math.min(60, canvas.width * 0.08), top = 52, w = canvas.width - pad * 2, h = canvas.height - 105;
+  
+  // 1. 远古符文玄武岩地面
+  AssetManager.drawTiled("ruinsFloor", ctx, pad + 12, top + 14, w - 24, h - 26, 64);
+  // 2. 巨石遗迹墙体
+  AssetManager.draw("ruinsWall", ctx, pad + 12, top - 18, w - 24, 76);
+  // 3. 左右两侧发光图腾立柱
+  AssetManager.draw("ruinsPillar", ctx, pad + 32, top + 25, 48, 120);
+  AssetManager.draw("ruinsPillar", ctx, pad + w - 80, top + 25, 48, 120);
+  // 4. 中央远古圣坛与悬浮核心
+  const altarX = canvas.width / 2, altarY = top + h * 0.35;
+  AssetManager.draw("ruinsAltar", ctx, altarX - 60, altarY - 50, 120, 105);
+  // 5. 左右两口神秘遗迹石匣
+  AssetManager.draw("ruinsChest", ctx, pad + 45, top + h * 0.62, 54, 54);
+  AssetManager.draw("ruinsChest", ctx, pad + w - 99, top + h * 0.62, 54, 54);
+  
+  // 南侧发光传送阵（出口）
+  ctx.fillStyle = "rgba(40, 200, 255, 0.22)";
+  ctx.beginPath(); ctx.ellipse(canvas.width / 2, top + h - 8, 48, 16, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#72e5ff"; ctx.lineWidth = 2; ctx.stroke();
+  
+  ctx.fillStyle = "#e2f7ff"; ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("失落神殿 · 圣所内部", canvas.width / 2, 30);
+  ctx.font = "12px sans-serif"; ctx.fillStyle = "#a8e5ff";
+  ctx.fillText("靠近中央圣坛按 E 调查核心 · 靠近左右石匣按 E 搜寻 · 南侧传送阵按 E 或 Q 离开", canvas.width / 2, canvas.height - 18);
+  
+  drawCharacterSprite(ctx, gameState.player.x, gameState.player.y, gameState.selectedCharacter?.id || "scout", gameState.player.facing || "down", gameState.player.moving, gameState.player.walkTime || 0, gameState.player.actionUntil > performance.now() ? gameState.player.actionType : "");
+}
+
+function enterPirateShip() {
+  gameState.pirateShipReturnPosition = { x: gameState.player.x, y: gameState.player.y };
+  gameState.location = "pirateShip";
+  gameState.player.x = canvas.width / 2;
+  gameState.player.y = canvas.height - 96;
+  gameState.player.moving = false;
+  gameState.keys.clear();
+  showToast("进入海盗沉船底舱：船体倾斜，四周散落着沉船宝藏与航海遗物。");
+  drawWorld();
+  saveGame(false);
+}
+
+function leavePirateShip() {
+  const p = gameState.pirateShipReturnPosition;
+  gameState.location = "world";
+  gameState.player.x = p?.x ?? (86.5 * TILE_SIZE);
+  gameState.player.y = p?.y ?? (88 * TILE_SIZE);
+  gameState.pirateShipReturnPosition = null;
+  gameState.keys.clear();
+  drawWorld();
+  saveGame(false);
+}
+
+function drawPirateShipInterior() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#181410"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const pad = Math.min(60, canvas.width * 0.08), top = 52, w = canvas.width - pad * 2, h = canvas.height - 105;
+  
+  // 1. 弧形橡木船底板
+  AssetManager.drawTiled("shipFloor", ctx, pad + 12, top + 14, w - 24, h - 26, 64);
+  // 2. 弯曲肋木与舷窗海光
+  AssetManager.draw("shipWall", ctx, pad + 12, top - 18, w - 24, 76);
+  // 3. 舰载重型黄铜火炮
+  AssetManager.draw("shipCannon", ctx, pad + 38, top + h * 0.22, 85, 75);
+  // 4. 船长航海桌
+  AssetManager.draw("captainsDesk", ctx, canvas.width * 0.25, canvas.height * 0.35, 110, 80);
+  // 5. 堆积的金币宝箱与财宝
+  AssetManager.draw("treasurePile", ctx, canvas.width * 0.68, canvas.height * 0.44, 120, 105);
+  
+  // 南侧出仓扶梯
+  ctx.fillStyle = "#2c1c0f"; ctx.fillRect(canvas.width / 2 - 36, top + h - 14, 72, 28);
+  ctx.fillStyle = "#c59a5d"; ctx.fillRect(canvas.width / 2 - 28, top + h - 10, 56, 16);
+  
+  ctx.fillStyle = "#f5e4bd"; ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("海盗沉船 · 底舱与船长室", canvas.width / 2, 30);
+  ctx.font = "12px sans-serif"; ctx.fillStyle = "#ffd885";
+  ctx.fillText("靠近右侧宝藏按 E 搜刮 · 靠近航海桌按 E 查看日记 · 南侧舱梯按 E 或 Q 离开", canvas.width / 2, canvas.height - 18);
+  
+  drawCharacterSprite(ctx, gameState.player.x, gameState.player.y, gameState.selectedCharacter?.id || "scout", gameState.player.facing || "down", gameState.player.moving, gameState.player.walkTime || 0, gameState.player.actionUntil > performance.now() ? gameState.player.actionType : "");
+}
+
 function drawWorld() {
   if (gameState.location === "camp") { drawCampInterior(); applyEnvironmentOverlay(); return; }
   if (gameState.location === "cabin") { drawAbandonedCabinInterior(); applyEnvironmentOverlay(); return; }
   if (gameState.location === "aircraft") { drawAircraftInterior(); applyEnvironmentOverlay(); return; }
+  if (gameState.location === "ancientRuins") { drawAncientRuinsInterior(); applyEnvironmentOverlay(); return; }
+  if (gameState.location === "pirateShip") { drawPirateShipInterior(); applyEnvironmentOverlay(); return; }
   if (gameState.location === "region") { drawRegionMap(); applyEnvironmentOverlay(); return; }
   const player = gameState.player;
   const worldPixelWidth = MAP_WIDTH * TILE_SIZE;
@@ -3965,14 +4604,23 @@ function drawWorld() {
     else if (obj.type === "companionNpc") {
       const def = companionForObject(obj);
       if (def) {
-        const portrait = AssetManager.get(def.portrait);
-        ctx.save(); ctx.fillStyle="rgba(10,16,13,.30)"; ctx.beginPath(); ctx.ellipse(screenX+TILE_SIZE/2,screenY+TILE_SIZE-2,12,4,0,0,Math.PI*2);ctx.fill();
-        if (portrait) { ctx.imageSmoothingEnabled=false; ctx.drawImage(portrait,screenX+3,screenY-5,26,31); }
-        else drawCharacterSprite(ctx,screenX+TILE_SIZE/2,screenY+TILE_SIZE-2,obj.characterId,"down",false,0,"",0.78);
-        ctx.fillStyle="#f3e4c3";ctx.font="bold 10px sans-serif";ctx.textAlign="center";ctx.fillText(def.name,screenX+TILE_SIZE/2,screenY-8);
-        ctx.fillStyle="#d8c79b";ctx.font="9px sans-serif";ctx.fillText(mainQuestState.flags[`companion_${obj.characterId}`] ? (obj.characterId==="hunter"&&mainQuestState.flags.hunterFollowing?"E 让其回营":"E 交谈") : "E 交谈",screenX+TILE_SIZE/2,screenY+TILE_SIZE+9);ctx.restore();
+        ctx.save();
+        // 与主角完全一致的标准1.0等身尺寸（46x58），不再出现半身缩放与忽大忽小
+        drawCharacterSprite(ctx, screenX + TILE_SIZE/2, screenY + TILE_SIZE - 2, obj.characterId, "down", false, 0, "", 1.0);
+        ctx.fillStyle="#f3e4c3"; ctx.font="bold 11px sans-serif"; ctx.textAlign="center"; ctx.fillText(def.name, screenX + TILE_SIZE/2, screenY - 14);
+        ctx.fillStyle="#d8c79b"; ctx.font="10px sans-serif";
+        const promptLabel = mainQuestState.flags[`companion_${obj.characterId}`] ? (obj.characterId==="hunter"&&mainQuestState.flags.hunterFollowing?"E 随行探险":"E 营地交谈") : "E 结识伙伴";
+        ctx.fillText(promptLabel, screenX + TILE_SIZE/2, screenY + TILE_SIZE + 10);
+        ctx.restore();
       }
     }
+    else if (obj.type === "ancientRuins") drawAncientRuins(screenX, screenY, obj);
+    else if (obj.type === "mysticAltar") drawMysticAltar(screenX, screenY, obj);
+    else if (obj.type === "abandonedCamp") drawAbandonedCamp(screenX, screenY, obj);
+    else if (obj.type === "pirateWreck") drawPirateWreck(screenX, screenY, obj);
+    else if (obj.type === "supplyCrate") drawSupplyCrate(screenX, screenY, obj);
+    else if (obj.type === "fishingPier") drawFishingPier(screenX, screenY, obj);
+    else if (obj.type === "richOre") drawRichOreNode(screenX, screenY, obj);
     else if (obj.type === "aircraftWreck") drawAircraftWreck(screenX, screenY);
     else if (obj.type === "droppedItem") {
       const dropKey = obj.itemId === "wood" ? "wood" : obj.itemId === "berry" ? "berry" : null;
@@ -4079,7 +4727,19 @@ function drawOverviewMap(targetCtx, targetCanvas) {
   targetCtx.lineWidth = Math.max(1, width / 150);
   targetCtx.stroke();
   // 固定地点始终显示在大地图：木屋、河谷入口、断脊入口与水源。
-  const landmarks=[{col:56,row:52,label:"坠机残骸",color:"#f0c96d"},{col:58,row:45,label:"木屋",color:"#e8c27c"},{col:67,row:51,label:"河谷",color:"#78c9d8"},{col:82,row:15,label:"断崖",color:"#d4d8c9"}];
+  const landmarks = [
+    { col: 56, row: 52, label: "坠机残骸", color: "#f0c96d" },
+    { col: 58, row: 45, label: "木屋", color: "#e8c27c" },
+    { col: 67, row: 51, label: "河谷入口", color: "#78c9d8" },
+    { col: 82, row: 15, label: "断崖通道", color: "#d4d8c9" },
+    { col: 18, row: 16, label: "失落神殿", color: "#b388ff" },
+    { col: 84, row: 76, label: "古代神龛", color: "#69f0ae" },
+    { col: 30, row: 74, label: "探险营地", color: "#ffab91" },
+    { col: 86, row: 86, label: "海盗沉船", color: "#ffd54f" },
+    { col: 51, row: 36, label: "北垂钓点", color: "#4dd0e1" },
+    { col: 53, row: 68, label: "南垂钓点", color: "#4dd0e1" },
+    { col: 76, row: 14, label: "黑岩矿区", color: "#90caf9" }
+  ];
   for(const mark of landmarks){const mx=(mark.col/MAP_WIDTH)*width,my=(mark.row/MAP_HEIGHT)*height;targetCtx.beginPath();targetCtx.arc(mx,my,Math.max(3,width/90),0,Math.PI*2);targetCtx.fillStyle=mark.color;targetCtx.fill();targetCtx.font=`${Math.max(8,width/85)}px sans-serif`;targetCtx.textAlign="center";targetCtx.fillStyle="#fff0c2";targetCtx.fillText(mark.label,mx,my-5);}
   const target=questTargetInfo();if(target&&target.map==="world")drawMapQuestPin(targetCtx,targetCanvas,(target.x/(MAP_WIDTH*TILE_SIZE))*width,(target.y/(MAP_HEIGHT*TILE_SIZE))*height);
 }
@@ -4458,7 +5118,19 @@ document.querySelector("#compendium-items-tab")?.addEventListener("click", () =>
 document.querySelector("#compendium-creatures-tab")?.addEventListener("click", () => setCompendiumTab("creatures"));
 compendiumModal?.addEventListener("click", event => { if (event.target === compendiumModal) closeCompendium(); });
 document.querySelector("#camp-upgrade-btn").addEventListener("click",upgradeCamp);
-canvas.addEventListener("click", (event) => { if(gameState.location!=="camp"||!gameState.running)return; const rect=canvas.getBoundingClientRect(); const x=event.clientX-rect.left,y=event.clientY-rect.top; const orbX=canvas.width/2,orbY=54+(canvas.height-110)*.28; if(Math.hypot(x-orbX,y-orbY)<48) upgradeCamp(true); });
+canvas.addEventListener("click", (event) => {
+  if (!gameState.running) return;
+  if (gameState.location === "camp") {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left, y = event.clientY - rect.top;
+    const orbX = canvas.width / 2, orbY = 54 + (canvas.height - 110) * 0.28;
+    if (Math.hypot(x - orbX, y - orbY) < 48) { upgradeCamp(true); return; }
+  }
+  // PC 端鼠标点击 Canvas 触发当前朝向攻击
+  if (!DeviceController.isMobile() && getActiveWeapon()) {
+    performAttack();
+  }
+});
 document.querySelector("#campfire-refuel-btn").addEventListener("click",refuelCampfire);
 document.querySelector("#sleep-3h-btn")?.addEventListener("click", () => sleepForHours(3, false));
 document.querySelector("#sleep-day-btn")?.addEventListener("click", () => sleepForHours(0, true));
@@ -4498,7 +5170,14 @@ window.addEventListener("keydown", (event) => {
   if (!gameState.running) return;
   if (storyDialog && !storyDialog.classList.contains("hidden")) { if (event.key === "Enter" || event.key === "e" || event.key === " " ) { event.preventDefault(); closeStoryDialog(true); } return; }
   const key = event.key.toLowerCase();
-  if (gameState.location === "aircraft" && key === "q") { event.preventDefault(); leaveAircraft(); return; }
+  if (["aircraft", "cabin", "ancientRuins", "pirateShip"].includes(gameState.location) && key === "q") {
+    event.preventDefault();
+    if (gameState.location === "aircraft") leaveAircraft();
+    else if (gameState.location === "cabin") leaveAbandonedCabin();
+    else if (gameState.location === "ancientRuins") leaveAncientRuins();
+    else if (gameState.location === "pirateShip") leavePirateShip();
+    return;
+  }
   if (!questModal.classList.contains("hidden") && key !== "j") return;
   if (key === "m") {
     event.preventDefault();
@@ -4532,9 +5211,9 @@ window.addEventListener("keydown", (event) => {
     interactWithWorld();
     return;
   }
-  if (key === "f") {
+  if (key === "f" || (key === " " && (!storyDialog || storyDialog.classList.contains("hidden")))) {
     event.preventDefault();
-    if (getActiveWeapon()) attackWithMouseAim(); else useActiveItem();
+    if (getActiveWeapon()) performAttack(); else useActiveItem();
     return;
   }
   if (key === "p") {
@@ -4581,9 +5260,11 @@ function isSolidTile(col, row) {
     (row === 50 && (col === 53 || col === 54 || col === 58 || col === 59)) ||
     (row === 51 && (col === 53 || col === 54 || col === 58 || col === 59));
   if (wreckSolid) return true;
-  // 废弃木屋按墙体轮廓碰撞，南侧门洞保持开放。
-  const cabinWall = (row===43 && col>=56 && col<=60) || (row===44 && (col===56||col===57||col===59||col===60)) || (row===45 && (col===56||col===57||col===59||col===60));
-  if(cabinWall) return true;
+  // 废弃木屋按墙体真实轮廓碰撞：后墙row 44，侧墙与前墙row 45-46两侧，南部门口col 58保持开放通行。
+  const cabinWall = (row === 44 && col >= 56 && col <= 60) ||
+                    (row === 45 && (col <= 57 || col >= 59) && col >= 56 && col <= 60) ||
+                    (row === 46 && (col <= 57 || col >= 59) && col >= 56 && col <= 60);
+  if (cabinWall) return true;
   if (getTerrain(col, row) === TERRAIN.RIVER) return true;
   const obj = worldObjectByTile.get(`${col},${row}`);
   if (!obj || harvestedObjects.has(obj.id)) return false;
@@ -4665,51 +5346,186 @@ function updatePlayer(deltaTime) {
   if (keys.has("s") || keys.has("arrowdown")) dy += 1;
   if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
   if (keys.has("d") || keys.has("arrowright")) dx += 1;
-  if (dx && dy) { const length = Math.hypot(dx, dy); dx /= length; dy /= length; }
-  player.moving = Boolean(dx || dy);
-  if (!dx && !dy) { stepSoundElapsed = 0; return; }
-  if (Math.abs(dx) > Math.abs(dy)) player.facing = dx < 0 ? "left" : "right";
-  else player.facing = dy < 0 ? "up" : "down";
+
+  // 融合移动端虚拟摇杆输入
+  if (typeof virtualJoystickState !== "undefined" && virtualJoystickState.active) {
+    dx += virtualJoystickState.dx;
+    dy += virtualJoystickState.dy;
+  }
+
+  const hasInput = Boolean(dx || dy);
+  player.moving = hasInput;
+  if (!hasInput) {
+    stepSoundElapsed = 0;
+    return;
+  }
+
+  const length = Math.hypot(dx, dy);
+  if (length > 0) {
+    dx /= length;
+    dy /= length;
+  }
+
+  // 8 方向移动计算与朝向判定 (45度分区)
+  const angle = Math.atan2(dy, dx); // [-PI, PI]
+  if (angle >= -Math.PI / 8 && angle < Math.PI / 8) {
+    player.facing = "right";
+    player.facingVector = { dx: 1, dy: 0 };
+  } else if (angle >= Math.PI / 8 && angle < Math.PI * 3 / 8) {
+    player.facing = "downRight";
+    player.facingVector = { dx: 0.7071, dy: 0.7071 };
+  } else if (angle >= Math.PI * 3 / 8 && angle < Math.PI * 5 / 8) {
+    player.facing = "down";
+    player.facingVector = { dx: 0, dy: 1 };
+  } else if (angle >= Math.PI * 5 / 8 && angle < Math.PI * 7 / 8) {
+    player.facing = "downLeft";
+    player.facingVector = { dx: -0.7071, dy: 0.7071 };
+  } else if (angle >= -Math.PI * 3 / 8 && angle < -Math.PI / 8) {
+    player.facing = "upRight";
+    player.facingVector = { dx: 0.7071, dy: -0.7071 };
+  } else if (angle >= -Math.PI * 5 / 8 && angle < -Math.PI * 3 / 8) {
+    player.facing = "up";
+    player.facingVector = { dx: 0, dy: -1 };
+  } else if (angle >= -Math.PI * 7 / 8 && angle < -Math.PI * 5 / 8) {
+    player.facing = "upLeft";
+    player.facingVector = { dx: -0.7071, dy: -0.7071 };
+  } else {
+    player.facing = "left";
+    player.facingVector = { dx: -1, dy: 0 };
+  }
+
   player.walkTime += deltaTime * 10;
   stepSoundElapsed += deltaTime;
   if (stepSoundElapsed >= 0.38) { playSoundEffect("step"); stepSoundElapsed = 0; }
+
+  // 1. 自建营地内部
   if (gameState.location === "camp") {
     const step = player.speed * deltaTime;
-    const nx=Math.max(42,Math.min(canvas.width-42,player.x+dx*step));
-    const ny=Math.max(78,Math.min(canvas.height-44,player.y+dy*step));
-    const camp=selectedCamp();
-    const blocked=(x,y)=>Boolean(camp?.furniture?.some(f=>Math.abs(x-f.x)<30&&Math.abs(y-f.y)<27));
-    if(!blocked(nx,player.y))player.x=nx;
-    if(!blocked(player.x,ny))player.y=ny;
+    const nx = Math.max(42, Math.min(canvas.width - 42, player.x + dx * step));
+    const ny = Math.max(78, Math.min(canvas.height - 44, player.y + dy * step));
+    const camp = selectedCamp();
+    const blocked = (x, y) => Boolean(camp?.furniture?.some(f => Math.abs(x - f.x) < 30 && Math.abs(y - f.y) < 27));
+    if (!blocked(nx, player.y)) player.x = nx;
+    if (!blocked(player.x, ny)) player.y = ny;
     return;
   }
+
+  // 2. 废弃木屋内部：精准对齐工作台、木床与壁炉实际占地 (Footprint)
   if (gameState.location === "cabin") {
-    const step=player.speed*deltaTime, margin=38;
-    const nx=Math.max(margin,Math.min(canvas.width-margin,player.x+dx*step));
-    const ny=Math.max(82,Math.min(canvas.height-48,player.y+dy*step));
-    const blocked=(x,y)=> (Math.abs(x-canvas.width*.34)<44&&Math.abs(y-canvas.height*.39)<38) || (Math.abs(x-canvas.width*.68)<48&&Math.abs(y-canvas.height*.50)<42) || (Math.abs(x-canvas.width*.18)<34&&Math.abs(y-canvas.height*.68)<32);
-    if(!blocked(nx,player.y))player.x=nx;if(!blocked(player.x,ny))player.y=ny;return;
+    const step = player.speed * deltaTime;
+    const pad = 56, top = 48, w = canvas.width - pad * 2, h = canvas.height - 96;
+    const minX = pad + 18, maxX = canvas.width - pad - 18;
+    const minY = top + 26, maxY = canvas.height - 58;
+
+    // 桌子：draw("rangerDesk", ctx, canvas.width * 0.24, canvas.height * 0.32, 115, 85)
+    const deskLeft = canvas.width * 0.24, deskRight = deskLeft + 115;
+    const deskTop = canvas.height * 0.32 + 32, deskBottom = canvas.height * 0.32 + 85;
+    const isDesk = (x, y) => x >= deskLeft - 6 && x <= deskRight + 6 && y >= deskTop && y <= deskBottom + 4;
+
+    // 木床：draw("survivorBed", ctx, canvas.width * 0.65, canvas.height * 0.38, 85, 95)
+    const bedLeft = canvas.width * 0.65, bedRight = bedLeft + 85;
+    const bedTop = canvas.height * 0.38 + 26, bedBottom = canvas.height * 0.38 + 95;
+    const isBed = (x, y) => x >= bedLeft - 6 && x <= bedRight + 6 && y >= bedTop && y <= bedBottom + 4;
+
+    // 壁炉：draw("fireplace", ctx, pad + 20, top + h * 0.20, 85, 85)
+    const fpLeft = pad + 20, fpRight = fpLeft + 85;
+    const fpTop = top + h * 0.20 + 28, fpBottom = top + h * 0.20 + 85;
+    const isFireplace = (x, y) => x >= fpLeft - 6 && x <= fpRight + 6 && y >= fpTop && y <= fpBottom + 4;
+
+    const isSolid = (x, y) => isDesk(x, y) || isBed(x, y) || isFireplace(x, y);
+    const isDoorway = (x, y) => Math.abs(x - canvas.width / 2) < 42 && y > maxY - 15;
+
+    const nx = Math.max(minX, Math.min(maxX, player.x + dx * step));
+    const ny = Math.max(minY, Math.min(canvas.height - 38, player.y + dy * step));
+
+    if (!isSolid(nx, player.y) && (nx >= minX && nx <= maxX)) player.x = nx;
+    if (!isSolid(player.x, ny) && (ny <= maxY || isDoorway(player.x, ny))) player.y = ny;
+    return;
   }
+
+  // 3. 飞机残骸内部
   if (gameState.location === "aircraft") {
     const step = player.speed * deltaTime, margin = 36;
     const nx = Math.max(margin, Math.min(canvas.width - margin, player.x + dx * step));
     const ny = Math.max(82, Math.min(canvas.height - 54, player.y + dy * step));
-    // 分轴碰撞：椅子、驾驶台、货箱、断裂金属梁和舱壁均为实体，不能穿模。
     if (canOccupyAircraft(nx, player.y)) player.x = nx;
     if (canOccupyAircraft(player.x, ny)) player.y = ny;
     return;
   }
+
+  // 4. 失落神殿内部：对齐圣坛、图腾柱与石匣
+  if (gameState.location === "ancientRuins") {
+    const step = player.speed * deltaTime;
+    const pad = Math.min(60, canvas.width * 0.08), top = 52, w = canvas.width - pad * 2, h = canvas.height - 105;
+    const minX = pad + 16, maxX = canvas.width - pad - 16;
+    const minY = top + 26, maxY = canvas.height - 58;
+
+    // 圣坛核心：draw("ruinsAltar", ctx, altarX - 60, altarY - 50, 120, 105)
+    const altarX = canvas.width / 2, altarY = top + h * 0.35;
+    const isAltar = (x, y) => Math.abs(x - altarX) < 62 && y >= altarY - 18 && y <= altarY + 54;
+    // 左右图腾柱
+    const isPillar = (x, y) => (Math.abs(x - (pad + 56)) < 24 && y >= top + 65 && y <= top + 140) ||
+                               (Math.abs(x - (pad + w - 56)) < 24 && y >= top + 65 && y <= top + 140);
+    // 左右石匣
+    const isChest = (x, y) => (Math.abs(x - (pad + 72)) < 28 && y >= top + h * 0.62 + 10 && y <= top + h * 0.62 + 54) ||
+                              (Math.abs(x - (canvas.width - pad - 72)) < 28 && y >= top + h * 0.62 + 10 && y <= top + h * 0.62 + 54);
+
+    const isSolid = (x, y) => isAltar(x, y) || isPillar(x, y) || isChest(x, y);
+    const isExitPortal = (x, y) => Math.abs(x - canvas.width / 2) < 48 && y > maxY - 15;
+
+    const nx = Math.max(minX, Math.min(maxX, player.x + dx * step));
+    const ny = Math.max(minY, Math.min(canvas.height - 38, player.y + dy * step));
+    if (!isSolid(nx, player.y) && (nx >= minX && nx <= maxX)) player.x = nx;
+    if (!isSolid(player.x, ny) && (ny <= maxY || isExitPortal(player.x, ny))) player.y = ny;
+    return;
+  }
+
+  // 5. 海盗沉船内部：对齐加农炮、航海桌与宝藏堆
+  if (gameState.location === "pirateShip") {
+    const step = player.speed * deltaTime;
+    const pad = Math.min(60, canvas.width * 0.08), top = 52, w = canvas.width - pad * 2, h = canvas.height - 105;
+    const minX = pad + 16, maxX = canvas.width - pad - 16;
+    const minY = top + 26, maxY = canvas.height - 58;
+
+    // 航海桌：draw("captainsDesk", ctx, canvas.width * 0.25, canvas.height * 0.35, 110, 80)
+    const deskLeft = canvas.width * 0.25, deskRight = deskLeft + 110;
+    const deskTop = canvas.height * 0.35 + 26, deskBottom = canvas.height * 0.35 + 80;
+    const isDesk = (x, y) => x >= deskLeft - 6 && x <= deskRight + 6 && y >= deskTop && y <= deskBottom + 4;
+
+    // 宝藏堆：draw("treasurePile", ctx, canvas.width * 0.68, canvas.height * 0.44, 120, 105)
+    const pileLeft = canvas.width * 0.68, pileRight = pileLeft + 120;
+    const pileTop = canvas.height * 0.44 + 35, pileBottom = canvas.height * 0.44 + 105;
+    const isPile = (x, y) => x >= pileLeft - 6 && x <= pileRight + 6 && y >= pileTop && y <= pileBottom + 4;
+
+    // 加农炮：draw("shipCannon", ctx, pad + 38, top + h * 0.22, 85, 75)
+    const canLeft = pad + 38, canRight = canLeft + 85;
+    const canTop = top + h * 0.22 + 25, canBottom = top + h * 0.22 + 75;
+    const isCannon = (x, y) => x >= canLeft - 6 && x <= canRight + 6 && y >= canTop && y <= canBottom + 4;
+
+    const isSolid = (x, y) => isDesk(x, y) || isPile(x, y) || isCannon(x, y);
+    const isLadder = (x, y) => Math.abs(x - canvas.width / 2) < 42 && y > maxY - 15;
+
+    const nx = Math.max(minX, Math.min(maxX, player.x + dx * step));
+    const ny = Math.max(minY, Math.min(canvas.height - 38, player.y + dy * step));
+    if (!isSolid(nx, player.y) && (nx >= minX && nx <= maxX)) player.x = nx;
+    if (!isSolid(player.x, ny) && (ny <= maxY || isLadder(player.x, ny))) player.y = ny;
+    return;
+  }
+
+  // 6. 特殊区域 (Region)
   if (gameState.location === "region") {
     const l = getRegionMapLayout(), step = player.speed * deltaTime, r = 12;
     player.x = Math.max(l.x + r, Math.min(l.x + l.width - r, player.x + dx * step));
     player.y = Math.max(l.y + r, Math.min(l.y + l.height - r, player.y + dy * step));
     return;
   }
+
+  // 7. 大世界大地图
   recoverPlayerPosition();
   const stepX = dx * player.speed * deltaTime;
   const stepY = dy * player.speed * deltaTime;
   const radius = Math.max(8, player.size * 0.48);
-  // X/Y 分轴检测，碰撞后允许沿障碍边缘滑动。
+  // X/Y 分轴检测，碰撞后允许沿障碍边缘平滑滑动
   const nextX = Math.max(radius, Math.min(MAP_WIDTH * TILE_SIZE - radius, player.x + stepX));
   if (canOccupyPlayer(nextX, player.y)) player.x = nextX;
   const nextY = Math.max(radius, Math.min(MAP_HEIGHT * TILE_SIZE - radius, player.y + stepY));
@@ -4830,22 +5646,43 @@ function getActiveWeapon() {
   if (["bow", "crossbow", "spear", "sword", "axe", "ironAxe", "copperAxe", "silverAxe", "goldAxe", "stoneShard"].includes(item.id)) return item;
   return null;
 }
-function attackWithMouseAim() {
+function getPlayerFacingVector() {
+  if (gameState.player.facingVector && (gameState.player.facingVector.dx !== 0 || gameState.player.facingVector.dy !== 0)) {
+    return gameState.player.facingVector;
+  }
+  const facingMap = {
+    right: { dx: 1, dy: 0 },
+    downRight: { dx: 0.7071, dy: 0.7071 },
+    down: { dx: 0, dy: 1 },
+    downLeft: { dx: -0.7071, dy: 0.7071 },
+    left: { dx: -1, dy: 0 },
+    upLeft: { dx: -0.7071, dy: -0.7071 },
+    up: { dx: 0, dy: -1 },
+    upRight: { dx: 0.7071, dy: -0.7071 }
+  };
+  return facingMap[gameState.player.facing] || { dx: 0, dy: 1 };
+}
+
+function performAttack() {
   if (!gameState.running) return;
   const weapon = getActiveWeapon();
   if (!weapon) { useActiveItem(); return; }
   if (attackCooldown > 0) return;
-  const list = inventoryState.hotbar;
-  const index = inventoryState.activeHotbarIndex;
-  const item = list[index];
+
   const origin = { x: gameState.player.x, y: gameState.player.y };
-  const target = getMouseWorldPoint();
-  let dx = target.x - origin.x, dy = target.y - origin.y;
-  const length = Math.hypot(dx, dy);
-  if (length < 1) return;
-  dx /= length; dy /= length;
-  gameState.player.facing = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
-  gameState.player.actionType = "attack"; gameState.player.actionStartedAt = performance.now(); gameState.player.actionUntil = performance.now() + 470; gameState.player.attackAnimProgress = 0;
+  // 按照要求除去鼠标瞄准：人物朝向哪，打击方向就在哪！8方向完整适配
+  const dir = getPlayerFacingVector();
+  let dx = dir.dx, dy = dir.dy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+  const attackAngle = Math.atan2(dy, dx);
+
+  gameState.player.actionType = "attack";
+  gameState.player.actionStartedAt = performance.now();
+  gameState.player.actionUntil = performance.now() + 470;
+  gameState.player.attackAnimProgress = 0;
+
   if (weapon.id === "bow" || weapon.id === "crossbow") {
     const arrowIndex = inventoryState.hotbar.findIndex(i => i?.id === "arrow" && i.count > 0);
     const backpackArrowIndex = inventoryState.slots.findIndex(i => i?.id === "arrow" && i.count > 0);
@@ -4853,12 +5690,12 @@ function attackWithMouseAim() {
     if (!arrow) { showToast("没有箭矢了。先制作箭矢并放入背包或快捷栏。"); return; }
     arrow.count -= 1;
     if (arrow.count <= 0) { if (arrowIndex >= 0) inventoryState.hotbar[arrowIndex] = null; else inventoryState.slots[backpackArrowIndex] = null; }
-    projectiles.push({ x: origin.x, y: origin.y, vx: dx * (weapon.id === "crossbow" ? 650 : 520), vy: dy * (weapon.id === "crossbow" ? 650 : 520), damage: weapon.id === "crossbow" ? 38 : 25, life: 1.6, location: gameState.location, regionId: gameState.regionId, color: weapon.id === "crossbow" ? "#e7d8a4" : "#f5e5b1", trail: [] });
-    meleeEffects.push({ x: origin.x, y: origin.y, angle: Math.atan2(dy, dx), until: performance.now() + 230, kind: "ranged" });
+    // 箭矢沿着角色面对的 8 个方向发射
+    projectiles.push({ x: origin.x, y: origin.y - 14, vx: dx * (weapon.id === "crossbow" ? 650 : 520), vy: dy * (weapon.id === "crossbow" ? 650 : 520), damage: weapon.id === "crossbow" ? 38 : 25, life: 1.6, location: gameState.location, regionId: gameState.regionId, color: weapon.id === "crossbow" ? "#e7d8a4" : "#f5e5b1", trail: [] });
+    meleeEffects.push({ x: origin.x, y: origin.y - 14, angle: attackAngle, until: performance.now() + 230, kind: "ranged" });
     attackCooldown = weapon.id === "crossbow" ? 0.62 : 0.48;
     renderInventory(); renderHotbar(); playSoundEffect("bow");
   } else {
-    // 近战攻击改为时间轴驱动：点击时只进入蓄力，挥砍有效帧才检测伤害。
     if (meleeAttackState) return;
     const isAxe = /Axe$|^axe$/.test(weapon.id);
     const isSpear = weapon.id === "spear";
@@ -4868,14 +5705,14 @@ function attackWithMouseAim() {
       recovery: isAxe ? 0.34 : isSpear ? 0.25 : 0.22,
       damage: isAxe ? 25 : isSpear ? 34 : weapon.id === "sword" ? 32 : 22,
       reach: isSpear ? 100 : weapon.id === "sword" ? 82 : 76,
-      halfAngle: isSpear ? 0.24 : isAxe ? 0.78 : 0.92,
+      halfAngle: isSpear ? 0.28 : isAxe ? 0.82 : 0.95,
       hitstop: isAxe ? 0.095 : 0.065
     };
     const total = config.windup + config.active + config.recovery;
     meleeAttackState = {
       weaponId: weapon.id, state: "windup", elapsed: 0, config,
       originX: origin.x, originY: origin.y, dx, dy,
-      angle: Math.atan2(dy, dx), hitTargets: new Set(), hitResolved: false,
+      angle: attackAngle, hitTargets: new Set(), hitResolved: false,
       total, hitstop: config.hitstop
     };
     gameState.player.actionType = "attack";
@@ -4885,6 +5722,11 @@ function attackWithMouseAim() {
     attackCooldown = total + 0.06;
   }
   saveGame(false);
+}
+
+// 兼容别名
+function attackWithMouseAim() {
+  performAttack();
 }
 function updateMeleeAttack(deltaTime) {
   const attack = meleeAttackState;
@@ -5176,9 +6018,19 @@ function drawCombatEntities(cameraX = 0, cameraY = 0) {
     const pos=toScreen(p.x,p.y); ctx.save(); ctx.translate(pos.x,pos.y); ctx.rotate(Math.atan2(p.vy,p.vx));
     ctx.strokeStyle=p.color;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-11,0);ctx.lineTo(9,0);ctx.stroke();ctx.fillStyle="#dfd6b5";ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(5,-3);ctx.lineTo(5,3);ctx.closePath();ctx.fill();ctx.restore();
   }
-  if(mouseAim.inside && getActiveWeapon()) {
-    const playerScreen=toScreen(gameState.player.x,gameState.player.y);
-    ctx.save();ctx.strokeStyle="rgba(255,245,190,.55)";ctx.lineWidth=1.3;ctx.setLineDash([5,6]);ctx.beginPath();ctx.moveTo(playerScreen.x,playerScreen.y);ctx.lineTo(mouseAim.x,mouseAim.y);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle="#fff2b0";ctx.beginPath();ctx.arc(mouseAim.x,mouseAim.y,7,0,Math.PI*2);ctx.stroke();ctx.restore();
+  // 除去鼠标瞄准线：武器打击完全跟随角色八方向朝向，保持画面沉浸整洁
+  if (getActiveWeapon()) {
+    const playerScreen = toScreen(gameState.player.x, gameState.player.y);
+    const dir = getPlayerFacingVector();
+    ctx.save();
+    // 角色脚底朝向微光指示弧线
+    ctx.strokeStyle = "rgba(255, 225, 120, 0.45)";
+    ctx.lineWidth = 2;
+    const ang = Math.atan2(dir.dy, dir.dx);
+    ctx.beginPath();
+    ctx.arc(playerScreen.x, playerScreen.y - 8, 26, ang - 0.45, ang + 0.45);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 canvas.addEventListener("mousemove", event => { const rect=canvas.getBoundingClientRect();mouseAim.x=(event.clientX-rect.left)*canvas.width/rect.width;mouseAim.y=(event.clientY-rect.top)*canvas.height/rect.height;mouseAim.inside=true; });
@@ -5193,6 +6045,7 @@ let lastRenderTimestamp = 0;
 let cameraDeltaTime = 1 / 60;
 let questCheckElapsed = 0;
 function gameLoop(timestamp) {
+  DeviceController.update();
   if (!gameState.running) return;
   if (!gameState.lastTime) {
     gameState.lastTime = timestamp;
@@ -5372,7 +6225,7 @@ function loadGame(slot = currentSaveSlot) {
   gameState.player.x = Number(data.player?.x) || 50.5 * TILE_SIZE;
   gameState.player.y = Number(data.player?.y) || 50.5 * TILE_SIZE;
   gameState.player.moving = false; gameState.player.actionUntil = 0; gameState.player.facing = data.player?.facing || "down";
-  gameState.location = ["camp","region","cabin"].includes(data.location) ? data.location : "world";
+  gameState.location = ["camp","region","cabin","aircraft","ancientRuins","pirateShip"].includes(data.location) ? data.location : "world";
   gameState.cabinReturnPosition = data.cabinReturnPosition && Number.isFinite(data.cabinReturnPosition.x) ? data.cabinReturnPosition : null;
   gameState.aircraftFloor = data.aircraftFloor === "upper" ? "upper" : "lower";
   gameState.aircraftReturnPosition = data.aircraftReturnPosition && Number.isFinite(data.aircraftReturnPosition.x) ? data.aircraftReturnPosition : null;
@@ -5458,6 +6311,7 @@ function updateContinueButton() {
   continueButton.textContent = valid ? "继续游戏 · 选择存档" : "继续游戏（暂无存档）";
 }
 function launchGameLoop() {
+  DeviceController.init();
   gameState.keys.clear(); gameState.lastTime = 0; lastRenderTimestamp = 0; questCheckElapsed = 0;
   cameraState.x = null; cameraState.y = null;
   resizeGameCanvas();
@@ -5474,6 +6328,7 @@ function launchGameLoop() {
   gameState.animationFrameId = requestAnimationFrame(gameLoop);
 }
 function startGame() {
+  DeviceController.init();
   if (!gameState.selectedCharacter) return;
   document.querySelector("#player-name").textContent = gameState.selectedCharacter.name;
   document.querySelector("#death-overlay")?.classList.add("hidden");
