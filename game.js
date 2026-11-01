@@ -1205,7 +1205,7 @@ let mouseAim = { x: canvas.width * 0.7, y: canvas.height * 0.5, inside: false };
 let toastTimer = null;
 let interactionHintElapsed = 0;
 const interactionNames = {
-  tree: "树木", treeStump: "树桩", fruitTree: "野果树", log: "倒木", driftwood: "漂流木", aircraftWreck: "坠毁飞机残骸", playerCamp: "自建营地",
+  tree: "大树", treeMedium: "中型树木", treeSmall: "小树", treeStump: "树桩", fruitTree: "野果树", log: "倒木", driftwood: "漂流木", aircraftWreck: "坠毁客机残骸", playerCamp: "自建营地",
   rock: "石林岩块", stonePile: "零碎石块", branch: "树枝", reeds: "芦苇", mushroom: "菌菇",
   bush: "浆果灌木", flower: "野花", berries: "浆果灌木", campEntrance: "自建营地入口", cabinEntrance: "废弃木屋入口", waterSource: "河水取水点", riverGate: "碎石河谷入口", ridgeGate: "断脊高地入口", regionExit: "返回初始地图", regionCrate: "巡护员补给箱", storyPoint: "剧情线索", medicinalHerb: "止血草", ore: "铁矿脉", copperOre: "铜矿脉", silverOre: "银矿脉", goldOre: "金矿脉", pebbleNode: "河谷鹅卵石", highGrass: "高草丛", ancientRuins: "失落神殿遗迹", mysticAltar: "荒野古代神龛", abandonedCamp: "废弃探险家营地", pirateWreck: "浅滩海盗沉船", supplyCrate: "空投物资箱", fishingPier: "河畔垂钓码头", richOre: "富集高纯矿脉"
 };
@@ -1220,30 +1220,49 @@ function createWorldObjects() {
       const a = getTileRandom(col + 500, row + 700);
       const b = getTileRandom(col + 901, row + 1171);
       let type = null;
-      if (terrain === TERRAIN.FOREST && a > 0.905) type = "treeSmall";
-      else if (terrain === TERRAIN.FOREST && a > 0.73 && a <= 0.77 && b > 0.66) type = "log";
-      else if ((terrain === TERRAIN.FOREST || terrain === TERRAIN.MEADOW) && b > 0.925 && a < 0.35) type = "mushroom";
-      else if ((terrain === TERRAIN.FOREST || terrain === TERRAIN.GRASS || terrain === TERRAIN.MEADOW) && b > 0.83 && a < 0.31) type = "bush";
-      else if (terrain === TERRAIN.FOREST && b > 0.80 && b < 0.84 && a > 0.5) type = "fern";
-      else if (terrain === TERRAIN.ROCKY && a > 0.68) type = "rock";
-      else if ((terrain === TERRAIN.GRASS || terrain === TERRAIN.MEADOW || terrain === TERRAIN.FOREST) && b > 0.865 && b < 0.92 && a > 0.35) type = "branch";
-      else if ((terrain === TERRAIN.GRASS || terrain === TERRAIN.MEADOW || terrain === TERRAIN.FOREST || terrain === TERRAIN.SAND) && b > 0.92 && a > 0.38) type = "stonePile";
-      else if ((terrain === TERRAIN.GRASS || terrain === TERRAIN.MEADOW) && b > 0.72 && b < 0.865 && a > 0.24) type = "highGrass";
-      else if (terrain === TERRAIN.FOREST && b > 0.78 && b < 0.85 && a > 0.48) type = "highGrass";
-      else if ((terrain === TERRAIN.FOREST || terrain === TERRAIN.MEADOW) && b > 0.75 && b < 0.78 && a > 0.35) type = "medicinalHerb";
-      else if ((terrain === TERRAIN.GRASS || terrain === TERRAIN.MEADOW) && b > 0.82 && a > 0.58) type = "flower";
-      else if (terrain === TERRAIN.FOREST && b > 0.78 && b < 0.80 && a > 0.35) type = "fruitTree";
-      else if (terrain === TERRAIN.SHALLOW_WATER && b > 0.83) type = "reeds";
-      else if (terrain === TERRAIN.SAND && b > 0.94) type = "driftwood";
+      if (terrain === TERRAIN.FOREST) {
+        if (a > 0.36) {
+          // 森林树木生态：普通树木占大头（大树~48%、中树~33%、小树~10%），野生果树作为点缀（~9%）
+          if (b < 0.48) type = "tree";
+          else if (b < 0.80) type = "treeMedium";
+          else if (b < 0.91) type = "treeSmall";
+          else type = "fruitTree";
+        } else if (a > 0.28 && b > 0.72) type = "log";
+        else if (b > 0.86 && a < 0.18) type = "mushroom";
+        else if (b > 0.72 && a < 0.16) type = "bush";
+        else if (b > 0.58 && a < 0.22) type = "branch";
+        else if (b > 0.42 && a < 0.22) type = "highGrass";
+        else if (b > 0.30 && a < 0.16) type = "medicinalHerb";
+        else if (b > 0.20 && a < 0.14) type = "stonePile";
+      } else if (terrain === TERRAIN.MEADOW || terrain === TERRAIN.GRASS) {
+        if (a > 0.93) {
+          if (b < 0.50) type = "treeMedium";
+          else if (b < 0.85) type = "treeSmall";
+          else type = "fruitTree";
+        } else if (b > 0.88 && a > 0.40) type = "branch";
+        else if (b > 0.82 && a > 0.55) type = "flower";
+        else if (b > 0.70 && a > 0.25) type = "highGrass";
+        else if (b > 0.92 && a > 0.35) type = "stonePile";
+        else if (b > 0.83 && a < 0.25) type = "bush";
+        else if (b > 0.76 && b < 0.80 && a > 0.35) type = "medicinalHerb";
+      } else if (terrain === TERRAIN.ROCKY) {
+        if (a > 0.65) type = "rock";
+        else if (b > 0.88) type = "stonePile";
+      } else if (terrain === TERRAIN.SHALLOW_WATER && b > 0.82) {
+        type = "reeds";
+      } else if (terrain === TERRAIN.SAND) {
+        if (b > 0.93) type = "driftwood";
+        else if (b > 0.88 && a > 0.50) type = "stonePile";
+      }
       if (type) {
-        const obj = { id: worldObjectId(col, row), col, row, type, ...(type === "treeSmall" ? { stageAt: worldTimeMinutes } : {}) };
+        const obj = { id: worldObjectId(col, row), col, row, type, ...(type === "treeSmall" ? { stageAt: worldTimeMinutes } : {}), ...(type === "fruitTree" ? { fruitPicked: false } : {}) };
         worldObjects.push(obj);
         worldObjectByTile.set(`${col},${row}`, obj);
       }
     }
   }
-  // 保证树、巨石和枯木之间留出可通行的缝隙，避免密集障碍形成小型死胡同。
-  const solidTypes = new Set(["tree", "treeMedium", "treeSmall", "treeStump", "rock", "log", "driftwood"]);
+  // 保证石头和林木之间有通行的缝隙，避免死胡同
+  const solidTypes = new Set(["tree", "treeMedium", "treeSmall", "fruitTree", "treeStump", "rock", "log", "driftwood"]);
   const blockedTiles = new Set();
   const filtered = worldObjects.filter(obj => {
     if (!solidTypes.has(obj.type)) return true;
@@ -1635,7 +1654,7 @@ function wearTool(id, amount) {
 function getLootForObject(obj) {
   if (obj?.type === "droppedItem") return [obj.itemId, obj.count, `捡起${itemCatalog[obj.itemId]?.name || "物品"} ×${obj.count}`];
   return ({
-    tree: ["wood", 3, "砍下木材 ×3"], treeStump: ["branch", 1, "清理树桩获得树枝 ×1"], fruitTree: ["berries", 2, "从野果树上采到野果 ×2"],
+    tree: ["wood", 3, "砍伐大树获得木材 x3"], treeMedium: ["wood", 2, "砍伐中型树木获得木材 x2"], treeSmall: ["wood", 1, "砍伐小树获得木材 x1"], treeStump: ["branch", 1, "清理树桩获得树枝 x1"], fruitTree: ["berries", 2, "采摘野果 x2"],
     log: ["wood", 2, "从倒木上收集木材 ×2"], driftwood: ["wood", 1, "捡到漂流木 ×1"],
     rock: ["stone", 3, "开采岩块，获得石块 ×3"], stonePile: ["stone", 1, "捡到零碎石块 ×1"],
     branch: ["branch", 1, "捡到树枝 ×1"], reeds: ["reeds", 1, "采集芦苇 ×1"],
@@ -1784,13 +1803,14 @@ function updateInteractionPrompt(deltaTime = 0) {
   }
   const name = obj.type === "storyPoint" ? (obj.label || "剧情线索") : (interactionNames[obj.type] || "资源");
   let action = obj.type === "aircraftWreck" ? "进入飞机残骸（双层内部地图）" : obj.type === "cabinEntrance" ? "进入废弃木屋（独立室内）" : obj.type === "playerCamp" ? "进入自建营地" : obj.type === "campEntrance" ? "进入营地" : obj.type === "riverGate" ? (gameState.unlockedRegions.riverValley ? "进入碎石河谷" : "需要简易木筏") : obj.type === "ridgeGate" ? (gameState.unlockedRegions.ridgeHighlands ? "进入断脊高地" : "需要完成第 8 章“断桥工程点”主线") : obj.type === "regionExit" ? "返回初始地图" : obj.type === "regionCrate" ? "搜寻补给" : obj.type === "storyPoint" ? "调查线索" : obj.type === "waterSource" ? "装取生水" : "采集资源";
-  if (["treeSmall", "treeMedium", "tree"].includes(obj.type)) { const hits = obj.type === "treeSmall" ? 2 : obj.type === "treeMedium" ? 4 : 6; action = hasAnyWorkingTool(AXE_TOOL_IDS) ? `砍伐 ${obj.chopHits || 0}/${hits} · ${obj.type === "treeSmall" ? "小树" : obj.type === "treeMedium" ? "中树" : "大树"}` : "需要石斧或更高级斧具"; }
+  if (["treeSmall", "treeMedium", "tree"].includes(obj.type)) { const hits = obj.type === "treeSmall" ? 2 : obj.type === "treeMedium" ? 4 : 6; const label = obj.type === "treeSmall" ? "小树" : obj.type === "treeMedium" ? "中型树木" : "大树"; action = hasAnyWorkingTool(AXE_TOOL_IDS) ? `砍伐 ${obj.chopHits || 0}/${hits} · 获取木材 (${label})` : `需石斧或更高级斧头 (${label})`; }
   if (obj.type === "treeStump") action = hasAnyWorkingTool(AXE_TOOL_IDS) ? `清理树桩 ${obj.chopHits || 0}/2` : "需要石斧或更高级斧具";
   if (obj.type === "log") action = hasAnyWorkingTool(AXE_TOOL_IDS) ? "拆解倒木（消耗耐久）" : "需要石斧或更高级斧具";
   if (["rock","ore","copperOre","silverOre","goldOre"].includes(obj.type)) action = toolForOre(obj.type) ? "开采（消耗耐久）" : (obj.type === "goldOre" ? "需要银镐或金镐" : obj.type === "silverOre" ? "需要铜镐或更高级矿镐" : "需要石镐或更高级矿镐");
   if (obj.type === "stonePile") action = "捡取石块";
   if (obj.type === "droppedItem") action = "捡起丢弃物品";
-  if (obj.type === "fruitTree" || obj.type === "bush") action = "采摘野果 · 食物来源";
+  if (obj.type === "fruitTree") { action = !obj.fruitPicked ? (hasAnyWorkingTool(AXE_TOOL_IDS) ? "采摘野果 (有斧头可直接砍伐果木)" : "采摘野果 · 补充食物") : (hasAnyWorkingTool(AXE_TOOL_IDS) ? `砍伐果木 ${obj.chopHits || 0}/3 · 获取木材` : "果实已摘空 · 需斧头砍伐获取木材"); }
+  if (obj.type === "bush") action = "采摘野果 · 补充食物";
   if (obj.type === "highGrass") action = "采集植物纤维 ×2 · 可制作绳索";
   if (obj.type === "branch") action = "捡取树枝 · 工具材料";
   if (obj.type === "stonePile") action = "捡取小石块 · 初期优先收集";
@@ -2078,29 +2098,59 @@ function interactWithWorld() {
   if (obj.type === "ridgeGate") { showToast("当前版本第一章只开放翠影森林主地图，后续区域暂不开放。"); return; }
   if (obj.type === "waterSource") { if (!addItemToInventory("dirtyWater",1)) { showToast("背包已满，无法装水。"); return; } renderInventory(); renderHotbar(); showToast("装取生水 ×1。未经处理直接饮用有患病风险。"); saveGame(false); return; }
   if (obj.type === "regionCrate") { searchRegionCrate(obj); return; }
-  if ((["treeSmall", "treeMedium", "tree"].includes(obj.type) || obj.type === "treeStump" || obj.type === "log") && !hasAnyWorkingTool(AXE_TOOL_IDS)) {
-    showToast("徒手无法砍伐木材。先收集地面树枝、石块和高草丛纤维，搓制绳索后制作石斧。"); return;
+  // 果树采摘与砍伐双模式：未摘果时优先采摘野果，采摘后可作为果木砍伐；持有斧头也可直接砍伐
+  if (obj.type === "fruitTree" && !obj.fruitPicked && !hasAnyWorkingTool(AXE_TOOL_IDS)) {
+    addItemToInventory("berries", 2);
+    obj.fruitPicked = true;
+    obj.pickedAt = worldTimeMinutes;
+    playSoundEffect("pickup");
+    renderInventory(); renderHotbar();
+    showToast("从果树上采摘了野果 x2！果实已采空，该树现在可作为果木砍伐获取木材。");
+    saveGame(false);
+    return;
   }
-  // v31：成熟树需要多次挥斧；每次都有抖动、木屑、音效与耐久消耗，最后倒下并留下树桩。
-  if (["treeSmall", "treeMedium", "tree"].includes(obj.type)) {
+  if (obj.type === "fruitTree" && !obj.fruitPicked && hasAnyWorkingTool(AXE_TOOL_IDS) && (obj.chopHits || 0) === 0) {
+    // 持斧头首次交互按 E，先采摘果子，并提示再次按 E 可直接砍树，两全其美！
+    addItemToInventory("berries", 2);
+    obj.fruitPicked = true;
+    obj.pickedAt = worldTimeMinutes;
+    playSoundEffect("pickup");
+    renderInventory(); renderHotbar();
+    showToast("采摘了野果 x2！果实已采空，再次按 E 或挥动斧头即可砍伐果木获取木材！");
+    saveGame(false);
+    return;
+  }
+  if ((["treeSmall", "treeMedium", "tree", "fruitTree"].includes(obj.type) || obj.type === "treeStump" || obj.type === "log") && !hasAnyWorkingTool(AXE_TOOL_IDS)) {
+    showToast(obj.type === "fruitTree" ? "果树果实已采空，需装备石斧或更高级斧头方可砍伐获取木材！" : "徒手无法伐木。收集树枝、碎石和高草草丝可制作石斧。");
+    return;
+  }
+  if (["treeSmall", "treeMedium", "tree", "fruitTree"].includes(obj.type)) {
     const treeType = obj.type;
-    const hitsNeeded = treeType === "treeSmall" ? 2 : treeType === "treeMedium" ? 4 : 6;
-    const woodYield = treeType === "treeSmall" ? 1 : treeType === "treeMedium" ? 2 : 3;
+    const hitsNeeded = treeType === "treeSmall" ? 2 : treeType === "fruitTree" ? 3 : treeType === "treeMedium" ? 4 : 6;
+    const woodYield = treeType === "treeSmall" ? 1 : treeType === "fruitTree" ? 2 : treeType === "treeMedium" ? 2 : 3;
+    const branchYield = treeType === "tree" ? 2 : 1;
     obj.chopHits = (obj.chopHits || 0) + 1;
     obj.hitAt = performance.now();
     resourceHitEffects.push({ x: (obj.col + .5) * TILE_SIZE, y: (obj.row + .15) * TILE_SIZE, kind: "wood", born: performance.now(), seed: Math.random() });
     const axeId = bestWorkingTool(AXE_TOOL_IDS);
     const toolBroke = wearTool(axeId, 1);
     playSoundEffect("woodHit");
+    const treeLabel = treeType === "treeSmall" ? "小树" : treeType === "fruitTree" ? "果木树" : treeType === "treeMedium" ? "中型树木" : "大树";
     if (obj.chopHits < hitsNeeded) {
-      showToast(`${treeType === "treeSmall" ? "小树" : treeType === "treeMedium" ? "中树" : "大树"}砍伐进度：${obj.chopHits}/${hitsNeeded}。木屑飞落。${toolBroke ? "工具已损坏。" : ""}`);
+      showToast(`砍伐${treeLabel}进度：${obj.chopHits}/${hitsNeeded}。${toolBroke ? "斧头损坏！" : ""}`);
     } else {
       addItemToInventory("wood", woodYield);
-      addItemToInventory("branch", treeType === "tree" ? 2 : 1);
-      if (Math.random() < (treeType === "tree" ? .45 : .18)) addItemToInventory("bark", 1);
+      addItemToInventory("branch", branchYield);
+      if (Math.random() < (treeType === "tree" ? .45 : treeType === "fruitTree" ? .25 : .20)) addItemToInventory("bark", 1);
       if (treeType === "tree" && Math.random() < .28) addItemToInventory("resin", 1);
+      let extraMsg = "";
+      if (treeType === "fruitTree" && !obj.fruitPicked) {
+        addItemToInventory("berries", 2);
+        extraMsg = "，并震落收集了野果 x2";
+      }
+      obj.originalType = treeType;
       obj.type = "treeStump"; obj.chopHits = 0; obj.felledAt = performance.now();
-      showToast(`${treeType === "treeSmall" ? "小树" : treeType === "treeMedium" ? "中树" : "大树"}被砍倒！获得木材 ×${woodYield}、树枝 ×${treeType === "tree" ? 2 : 1}${toolBroke ? "；工具损坏" : ""}。树桩之后可以自然再生。`);
+      showToast(`砍倒了${treeLabel}！获得木材 x${woodYield}、树枝 x${branchYield}${extraMsg}${toolBroke ? "，斧头损坏！" : ""}。留下树桩。`);
       checkMainQuestProgress(); renderInventory(); renderHotbar(); saveGame(false);
     }
     renderInventory(); renderHotbar(); saveGame(false); return;
@@ -2464,6 +2514,7 @@ function updateResourceRespawns() {
     else if (obj.type === "treeSmall" && age >= 3 * 24 * 60) { obj.type = "treeMedium"; obj.stageAt = worldTimeMinutes; obj.chopHits = 0; }
     else if (obj.type === "treeMedium" && age >= 5 * 24 * 60) { obj.type = "tree"; obj.stageAt = worldTimeMinutes; obj.chopHits = 0; }
     else if (obj.type === "tree" && obj.stageAt != null && age >= 5 * 24 * 60) delete obj.stageAt;
+    if (obj.type === "fruitTree" && obj.fruitPicked && obj.pickedAt != null && (worldTimeMinutes - obj.pickedAt) >= 24 * 60) { obj.fruitPicked = false; delete obj.pickedAt; }
   }
   for (const obj of worldObjects) {
     if (!harvestedObjects.has(obj.id) || noRespawnObjects.has(obj.id)) continue;
@@ -4589,7 +4640,7 @@ function drawWorld() {
     const screenX=obj.col*TILE_SIZE-cameraX, screenY=obj.row*TILE_SIZE-cameraY;
     if (["tree", "treeMedium", "treeSmall", "fruitTree"].includes(obj.type)) {
       drawTree(screenX,screenY,obj.col,obj.row,obj);
-      if (obj.type === "fruitTree") drawFruitDetails(screenX,screenY,obj.col,obj.row);
+      if (obj.type === "fruitTree" && !obj.fruitPicked) drawFruitDetails(screenX,screenY,obj.col,obj.row);
       if (["tree", "treeMedium", "treeSmall"].includes(obj.type) && obj.chopHits) { ctx.fillStyle="#4a3021"; ctx.fillRect(screenX+TILE_SIZE/2-5,screenY+TILE_SIZE-10,Math.min(10,2+obj.chopHits),2); }
     }
     else if (obj.type === "treeStump") drawTreeStump(screenX,screenY,obj.col,obj.row,obj);
@@ -5766,7 +5817,18 @@ function updateMeleeAttack(deltaTime) {
         hitstopRemaining = Math.max(hitstopRemaining, cfg.hitstop);
       } else {
         // 只有确认没有命中目标才播放空挥声；命中音效与空挥音效不会混在一起。
-        playSoundEffect("swing");
+        const isAxe = /Axe$|^axe$/.test(attack.weaponId);
+        let hitTree = false;
+        if (isAxe) {
+          const frontObj = nearestWorldObject(cfg.reach + 16);
+          if (frontObj && ["tree", "treeMedium", "treeSmall", "fruitTree", "treeStump", "log"].includes(frontObj.type)) {
+            const fx = (frontObj.col + 0.5) * TILE_SIZE - player.x, fy = (frontObj.row + 0.5) * TILE_SIZE - player.y;
+            const dist = Math.hypot(fx, fy) || 1;
+            const dot = (fx / dist) * attack.dx + (fy / dist) * attack.dy;
+            if (dot > 0.20) { hitTree = true; interactWithWorld(); }
+          }
+        }
+        if (!hitTree) playSoundEffect("swing");
       }
     }
     if (attack.elapsed >= cfg.active) {
@@ -6150,7 +6212,7 @@ function saveGame(showMessage = true) {
     harvestedAtMinutes: [...harvestedAtMinutes.entries()],
     noRespawnObjects: [...noRespawnObjects],
     droppedItems: [...worldObjects, ...regionObjects].filter(o=>o.type === "droppedItem"),
-    resourceStates: worldObjects.filter(o => ["tree","treeMedium","treeSmall","treeStump","treeSapling","treeYoung"].includes(o.type)).map(o => ({ id:o.id, type:o.type, chopHits:o.chopHits||0, stageAt:o.stageAt??null, hitAt:0, felledAt:0 })),
+    resourceStates: worldObjects.filter(o => ["tree","treeMedium","treeSmall","treeStump","treeSapling","treeYoung","fruitTree"].includes(o.type)).map(o => ({ id:o.id, type:o.type, chopHits:o.chopHits||0, fruitPicked:Boolean(o.fruitPicked), pickedAt:o.pickedAt??null, stageAt:o.stageAt??null, hitAt:0, felledAt:0 })),
     enemies: enemies.map(e => ({ ...e })),
     explored: [...exploredTiles],
     task: document.querySelector("#current-task").textContent,
@@ -6270,7 +6332,7 @@ function loadGame(slot = currentSaveSlot) {
   noRespawnObjects.clear(); (data.noRespawnObjects || []).forEach(id => noRespawnObjects.add(id));
   // v31：恢复树木砍伐进度与再生阶段，避免保存/读取后树桩或幼树回滚。
   for (const state of (Array.isArray(data.resourceStates) ? data.resourceStates : [])) {
-    if (!["tree","treeMedium","treeSmall","treeStump","treeSapling","treeYoung"].includes(state.type)) continue;
+    if (!["tree","treeMedium","treeSmall","treeStump","treeSapling","treeYoung","fruitTree"].includes(state.type)) continue;
     const key = String(state.id);
     let obj = worldObjectByTile.get(key);
     // 玩家自行种植的树可能原本不属于程序生成的资源点，读档时需要补回对象。
@@ -6279,6 +6341,7 @@ function loadGame(slot = currentSaveSlot) {
       if (!Number.isFinite(col) || !Number.isFinite(row)) continue;
       obj = { id:key, col, row, type:state.type };
       worldObjects.push(obj); worldObjectByTile.set(key, obj);
+    if (state.fruitPicked) { obj.fruitPicked = true; obj.pickedAt = state.pickedAt ?? null; }
     }
     obj.type = state.type; obj.chopHits = Math.max(0, Number(state.chopHits)||0);
     if (Number(state.stageAt) > 0) obj.stageAt = Number(state.stageAt); else delete obj.stageAt;
