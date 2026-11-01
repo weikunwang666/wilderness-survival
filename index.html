@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>荒野求生：失落边境</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.0.2">
 </head>
 <body>
   <main id="app">
@@ -168,10 +168,14 @@
             <span class="vbtn-icon">⚔</span>
             <span class="vbtn-text">攻击</span>
           </button>
-          <!-- 交互按键 -->
-          <button id="vbtn-interact" class="vbtn vbtn-interact" type="button" aria-label="交互">
-            <span class="vbtn-icon">✋</span>
-            <span class="vbtn-text">交互 (E)</span>
+          <!-- 交互/采集按键（内置动态小图片预览，直接显示采集产物） -->
+          <button id="vbtn-interact" class="vbtn vbtn-interact" type="button" aria-label="交互采集">
+            <div id="vbtn-interact-badge" class="vbtn-interact-badge hidden">
+              <img id="vbtn-interact-img" class="vbtn-interact-img" src="images/items/wood.png" alt="" aria-hidden="true">
+              <span id="vbtn-interact-qty" class="vbtn-interact-qty">+2</span>
+            </div>
+            <span class="vbtn-icon" id="vbtn-interact-icon">✋</span>
+            <span class="vbtn-text" id="vbtn-interact-text">交互</span>
           </button>
           <!-- 辅助快捷按键：背包、制造、地图、离开 -->
           <div class="vbtn-sub-group">
@@ -401,7 +405,16 @@
     <div id="death-overlay" class="death-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="death-title">
       <div class="death-panel"><p class="eyebrow">SURVIVAL FAILED</p><h2 id="death-title">你在荒野中倒下了</h2><p>饥饿或缺水导致生命值归零。可以返回主菜单，选择其他存档，或重新开始并覆盖当前存档位。</p><div class="death-actions"><button id="death-menu-btn" type="button">返回主菜单</button><button id="death-restart-btn" class="primary-btn" type="button">重新开始本档</button></div></div>
     </div>
+    <!-- 移动端横屏游玩提示遮罩（竖屏时友好提示） -->
+    <div id="orientation-guard" class="orientation-guard hidden" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
+      <div class="orientation-box">
+        <div class="orientation-icon" aria-hidden="true">📱↻</div>
+        <h3 id="orientation-title">建议横屏游玩</h3>
+        <p>为了获得开阔的荒野视野与舒适的双手按键操作，请将手机旋转至横屏。</p>
+        <button id="orientation-dismiss-btn" class="orientation-dismiss-btn" type="button">继续竖屏游玩</button>
+      </div>
+    </div>
   </main>
-  <script src="game.js"></script>
+  <script src="game.js?v=1.0.2"></script>
 </body>
 </html>

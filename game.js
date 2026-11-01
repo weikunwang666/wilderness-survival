@@ -1,3 +1,4 @@
+const ASSET_CACHE_VERSION = "1.0.2";
 
 // ===================================================================
 // 设备适配与触控控制器系统（电脑设备 vs 手机移动设备自动分析与适配）
@@ -342,7 +343,7 @@ const AssetManager = (() => {
     const img = new Image(); images[key] = img;
     img.onload = () => { img.assetReady = true; };
     img.onerror = () => { if (!warned.has(key)) { warned.add(key); console.warn(`[AssetManager] 图片加载失败：${src}，继续使用兜底绘制。`); } };
-    img.src = src;
+    img.src = `${src}?v=${ASSET_CACHE_VERSION}`;
   }
   function draw(key, targetCtx, x, y, w, h) {
     const img = images[key]; if (!img || !img.complete || !img.naturalWidth) return false;
@@ -374,7 +375,7 @@ const AssetManager = (() => {
     if (!images[key] && key.startsWith("item_")) {
       const id = key.slice(5); const img = new Image(); images[key] = img;
       img.onerror = () => { if (!warned.has(key)) { warned.add(key); console.warn(`[AssetManager] 物品图标缺失：images/items/icons/${id}.png`); } };
-      img.src = `images/items/icons/${id}.png`;
+      img.src = `images/items/icons/${id}.png?v=${ASSET_CACHE_VERSION}`;
     }
     const img = images[key]; return img && img.complete && img.naturalWidth ? img : null;
   }
@@ -392,7 +393,7 @@ const CharacterAnimationAssets = (() => {
       img.onload = () => { img.assetReady = true; };
       // 动画表属于可选资产：缺失不报错、不刷屏，使用角色静态图兜底。
       img.onerror = () => { sheets[key] = null; };
-      img.src = `images/characters/${key}.png`;
+      img.src = `images/characters/${key}.png?v=${ASSET_CACHE_VERSION}`;
       sheets[key] = img;
     }
     const img = sheets[key];
@@ -1761,6 +1762,172 @@ function sleepForHours(hours, untilNextDay = false) {
     : `休息了 3 小时。生命 +15，饥饿和水分各减少 15（最低保留 5）。`);
   saveGame(false);
 }
+
+// 手游端采集按键内置动态物品预览与横屏适配
+function updateMobileInteractPreview(obj, fire, corpse, bed) {
+  const badge = document.querySelector("#vbtn-interact-badge");
+  const img = document.querySelector("#vbtn-interact-img");
+  const qty = document.querySelector("#vbtn-interact-qty");
+  const icon = document.querySelector("#vbtn-interact-icon");
+  const text = document.querySelector("#vbtn-interact-text");
+  const btn = document.querySelector("#vbtn-interact");
+  if (!btn) return;
+
+  if (!gameState.running || !inventoryModal.classList.contains("hidden") || !mapModal.classList.contains("hidden") || !craftingModal.classList.contains("hidden") || !questModal.classList.contains("hidden") || (sleepModal && !sleepModal.classList.contains("hidden"))) {
+    if (badge) badge.classList.add("hidden");
+    if (icon) icon.classList.remove("hidden");
+    if (text) text.textContent = "交互";
+    btn.classList.remove("pulse-ready");
+    return;
+  }
+
+  let previewIcon = null;
+  let previewQty = "";
+  let actionLabel = "交互";
+
+  if (corpse) {
+    previewIcon = "images/items/icons/rawMeat.png";
+    previewQty = "搜";
+    actionLabel = "搜割";
+  } else if (bed) {
+    previewIcon = "images/interiors/survivor_bed.png";
+    actionLabel = "睡眠";
+  } else if (fire) {
+    previewIcon = "images/environment/campfire.png";
+    actionLabel = "烹饪";
+  } else if (obj) {
+    if (["tree", "treeMedium", "treeSmall"].includes(obj.type)) {
+      previewIcon = "images/items/wood.png";
+      previewQty = obj.type === "tree" ? "+3" : obj.type === "treeMedium" ? "+2" : "+1";
+      actionLabel = obj.type === "tree" ? "砍大树" : obj.type === "treeMedium" ? "砍中树" : "砍小树";
+    } else if (obj.type === "fruitTree") {
+      if (!obj.fruitPicked) {
+        previewIcon = "images/items/berry.png";
+        previewQty = "+2";
+        actionLabel = "采野果";
+      } else {
+        previewIcon = "images/items/wood.png";
+        previewQty = "+2";
+        actionLabel = "砍果木";
+      }
+    } else if (obj.type === "treeStump") {
+      previewIcon = "images/environment/branch.png";
+      previewQty = "+2";
+      actionLabel = "除树桩";
+    } else if (obj.type === "log" || obj.type === "driftwood") {
+      previewIcon = "images/items/wood.png";
+      previewQty = obj.type === "log" ? "+2" : "+1";
+      actionLabel = "拾原木";
+    } else if (["rock","ore","copperOre","silverOre","goldOre"].includes(obj.type)) {
+      previewIcon = "images/items/icons/stone.png";
+      previewQty = "+3";
+      actionLabel = "采矿石";
+    } else if (obj.type === "stonePile") {
+      previewIcon = "images/items/icons/stone.png";
+      previewQty = "+1";
+      actionLabel = "捡碎石";
+    } else if (obj.type === "branch") {
+      previewIcon = "images/environment/branch.png";
+      previewQty = "+1";
+      actionLabel = "拾树枝";
+    } else if (obj.type === "bush" || obj.type === "berries") {
+      previewIcon = "images/items/berry.png";
+      previewQty = "+2";
+      actionLabel = "采浆果";
+    } else if (obj.type === "highGrass") {
+      previewIcon = "images/items/icons/fiber.png";
+      previewQty = "+2";
+      actionLabel = "割草丝";
+    } else if (obj.type === "medicinalHerb") {
+      previewIcon = "images/items/icons/herb.png";
+      previewQty = "+1";
+      actionLabel = "采草药";
+    } else if (obj.type === "mushroom") {
+      previewIcon = "images/items/icons/unknownMushroom.png";
+      previewQty = "+1";
+      actionLabel = "采蘑菇";
+    } else if (obj.type === "waterSource") {
+      previewIcon = "images/items/icons/water.png";
+      previewQty = "+1";
+      actionLabel = "取淡水";
+    } else if (obj.type === "droppedItem") {
+      previewIcon = `images/items/icons/${obj.itemId}.png`;
+      previewQty = `x${obj.count}`;
+      actionLabel = "拾取";
+    } else if (["cabinEntrance", "aircraftWreck", "ancientRuins", "pirateWreck"].includes(obj.type)) {
+      previewIcon = "images/ui/field_guide.png";
+      actionLabel = "进入";
+    } else if (obj.type === "companionNpc") {
+      previewIcon = `images/characters/${obj.characterId}.png`;
+      actionLabel = "对话";
+    } else if (obj.type === "supplyCrate") {
+      previewIcon = "images/landmarks/supply_crate.png";
+      actionLabel = "搜空投";
+    } else if (obj.type === "playerCamp" || obj.type === "campEntrance") {
+      previewIcon = "images/environment/campfire.png";
+      actionLabel = "回营地";
+    } else {
+      actionLabel = interactionNames[obj.type] || "交互";
+    }
+  }
+
+  if (previewIcon) {
+    if (badge) badge.classList.remove("hidden");
+    if (img) img.src = `${previewIcon}?v=${ASSET_CACHE_VERSION}`;
+    if (qty) qty.textContent = previewQty;
+    if (icon) icon.classList.add("hidden");
+    if (text) text.textContent = actionLabel;
+    btn.classList.add("pulse-ready");
+  } else {
+    if (badge) badge.classList.add("hidden");
+    if (icon) icon.classList.remove("hidden");
+    if (text) text.textContent = "交互";
+    btn.classList.remove("pulse-ready");
+  }
+}
+
+function initOrientationGuard() {
+  const guard = document.querySelector("#orientation-guard");
+  const dismissBtn = document.querySelector("#orientation-dismiss-btn");
+  if (!guard) return;
+
+  let dismissed = false;
+  if (dismissBtn) {
+    dismissBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dismissed = true;
+      guard.classList.add("hidden");
+    });
+  }
+
+  function checkOrientation() {
+    if (dismissed) return;
+    const isMobile = DeviceController.isMobileMode();
+    const isPortrait = window.innerHeight > window.innerWidth;
+    if (isMobile && isPortrait && window.innerWidth <= 900) {
+      guard.classList.remove("hidden");
+    } else {
+      guard.classList.add("hidden");
+    }
+  }
+
+  window.addEventListener("resize", checkOrientation);
+  window.addEventListener("orientationchange", () => {
+    setTimeout(checkOrientation, 200);
+  });
+  checkOrientation();
+
+  // 手机端在用户触摸时主动请求横屏锁定
+  function requestLandscapeLock() {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    }
+  }
+  document.addEventListener("touchstart", requestLandscapeLock, { once: true });
+  document.querySelector("#start-btn")?.addEventListener("click", requestLandscapeLock);
+  document.querySelector("#continue-btn")?.addEventListener("click", requestLandscapeLock);
+}
+
 function updateInteractionPrompt(deltaTime = 0) {
   if (!interactionPrompt) return;
   interactionHintElapsed += deltaTime;
@@ -1781,6 +1948,13 @@ function updateInteractionPrompt(deltaTime = 0) {
   const fire = gameState.running && gameState.location === "world" ? nearestCampfire(76) : null;
   const corpse = gameState.running ? nearestCorpse(58) : null;
   const bed = gameState.running ? nearestCampBed(76) : null;
+  // 移动端模式下：彻底隐藏中下方按E采集提示（避免遮挡视野），并将采集产物直接展示在手游交互按钮上
+  if (DeviceController.isMobileMode()) {
+    if (interactionPrompt) { interactionPrompt.classList.add("hidden"); interactionPrompt.textContent = ""; }
+    updateMobileInteractPreview(obj, fire, corpse, bed);
+    return;
+  }
+  updateMobileInteractPreview(null, null, null, null);
   if (corpse && inventoryModal.classList.contains("hidden") && mapModal.classList.contains("hidden") && craftingModal.classList.contains("hidden") && questModal.classList.contains("hidden") && (!sleepModal || sleepModal.classList.contains("hidden"))) {
     interactionPrompt.innerHTML = `<kbd>E</kbd><span>${ENEMY_TYPES[corpse.type]?.name || "野兽"}尸体 · 搜索战利品</span>`;
     interactionPrompt.classList.remove("hidden");
@@ -6374,6 +6548,7 @@ function updateContinueButton() {
   continueButton.textContent = valid ? "继续游戏 · 选择存档" : "继续游戏（暂无存档）";
 }
 function launchGameLoop() {
+  initOrientationGuard();
   DeviceController.init();
   gameState.keys.clear(); gameState.lastTime = 0; lastRenderTimestamp = 0; questCheckElapsed = 0;
   cameraState.x = null; cameraState.y = null;
@@ -6391,6 +6566,7 @@ function launchGameLoop() {
   gameState.animationFrameId = requestAnimationFrame(gameLoop);
 }
 function startGame() {
+  initOrientationGuard();
   DeviceController.init();
   if (!gameState.selectedCharacter) return;
   document.querySelector("#player-name").textContent = gameState.selectedCharacter.name;
